@@ -1,0 +1,5 @@
+source_dataset,n_records,n_unique_patients,patient_ids_are_real,n_patients_with_multiple_ecgs,max_ecgs_per_patient,mean_ecgs_per_patient,patient_level_splitting_possible
+CHAPMAN,7791,7791,"no (synthetic, one per record)",0,1,1.0,NO -- no patient identifier in source
+PTBXL,10142,9284,yes,664,9,1.0924,YES
+STEMI,1442,1437,yes,5,2,1.0035,YES
+ALL,19375,18512,mixed,669,9,1.0466,PARTIAL -- see per-source rows

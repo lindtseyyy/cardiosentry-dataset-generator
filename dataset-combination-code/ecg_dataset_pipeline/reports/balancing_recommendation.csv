@@ -1,0 +1,6 @@
+class,available_valid_records,current_ratio_to_stemi,preferred_target_from_brief,preferred_target_achievable,recommended_target,would_be_retained,would_be_discarded,pct_retained,recommended_ratio_to_stemi,note
+STEMI,1442,1.000,1442,yes,1442,1442,0,100.00,1.000,"scarcest class -- kept in full, defines the floor"
+AF,2741,1.901,2800,NO,2741,2741,0,100.00,1.901,preferred target 2800 exceeds the 2741 valid records available; capped at 2741
+LVH,2542,1.763,2700,NO,2542,2542,0,100.00,1.763,preferred target 2700 exceeds the 2542 valid records available; capped at 2542
+NORMAL,12906,8.950,2800,yes,2800,2800,10106,21.70,1.942,preferred target 2800 is achievable
+TOTAL,19631,,9742,,9525,9525,10106,48.52,,no balancing has been performed -- this is a recommendation only

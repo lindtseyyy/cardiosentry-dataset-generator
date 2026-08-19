@@ -1,0 +1,6 @@
+# CardioSentry data-preparation pipeline
+# Python 3.10+
+pandas>=2.0
+numpy>=1.24
+wfdb>=4.1
+PyYAML>=6.0

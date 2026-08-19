@@ -1,0 +1,44 @@
+# CardioSentry — dataset location configuration
+# Edit these paths to point at YOUR local copies of the datasets.
+# Paths may be absolute, or relative to the pipeline root (the directory
+# containing this `config/` folder).
+#
+# NOTHING is downloaded automatically. All three datasets are distributed
+# under licences that require you to obtain them yourself (PhysioNet
+# credentialed / DUA-gated). Provide local copies only.
+
+ptbxl:
+  enabled: true
+  # Root of the PTB-XL v1.0.3 distribution (contains ptbxl_database.csv)
+  root: "../../dataset-files/ptb-xl-dataset"
+  database_csv: "ptbxl_database.csv"
+  scp_statements_csv: "scp_statements.csv"
+  # Which sampling-rate variant to use. records500 = 500 Hz (target format).
+  # records100 (100 Hz) would need resampling and is NOT used by default.
+  filename_column: "filename_hr"
+
+chapman:
+  enabled: true
+  # Root of the Chapman-Shaoxing / Ningbo 12-lead ECG database
+  # (contains WFDBRecords/ and ConditionNames_SNOMED-CT.csv)
+  root: "../../dataset-files/chapman-dataset"
+  records_dir: "WFDBRecords"
+  condition_names_csv: "ConditionNames_SNOMED-CT.csv"
+
+stemi:
+  enabled: true
+  # Root of the 2026 ACS/STEMI dataset
+  root: "../../dataset-files/STEMI-dataset"
+  train_csv: "CSV/train.csv"
+  # test.csv carries NO diagnostic columns -> it cannot be labelled and is
+  # excluded from the pipeline. Set to null to skip it entirely.
+  test_csv: "CSV/test.csv"
+  signal_dir: "ECG_row_data/row_data"
+  # The median-beat files (ECG_median_data/med_data/*.med) are NOT raw 10 s
+  # rhythm strips and are not used. See README.
+  median_dir: "ECG_median_data/med_data"
+
+output:
+  reports_dir: "reports"
+  harmonized_dir: "data/harmonized"
+  balanced_dir: "data/balanced"

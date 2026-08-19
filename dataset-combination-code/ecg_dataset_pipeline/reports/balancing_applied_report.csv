@@ -1,0 +1,6 @@
+class,available_in_harmonized,target,selected,discarded,pct_retained,ratio_to_stemi,target_met,note
+STEMI,1442,1442,1442,0,100.00,1.000,yes,
+AF,2741,2741,2741,0,100.00,1.901,yes,
+LVH,2542,2542,2542,0,100.00,1.763,yes,
+NORMAL,12906,2800,2800,10106,21.70,1.942,yes,
+TOTAL_RECORDS,19375,9525,9269,10106,47.84,,,"seed=42; patient groups kept intact; 8,720 groups selected"

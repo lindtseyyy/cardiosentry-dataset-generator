@@ -1,0 +1,421 @@
+# =====================================================================
+# CardioSentry — EXPLICIT LABEL MAPPING CONFIGURATION
+# =====================================================================
+# Every clinical labelling decision in this pipeline is declared HERE.
+# No label decision is hidden inside the Python code.
+#
+# CardioSentry target classes (4 independent sigmoid heads):
+#   STEMI, AF, LVH, NORMAL
+#
+# mapping status vocabulary
+#   ACCEPT              -> source label maps to the CardioSentry class in `maps_to`
+#   EXCLUDE_UNCERTAIN   -> could plausibly be a target class, but the source
+#                          labelling does not let us assert it confidently.
+#                          Never guessed. Reported in unmapped_labels_report.csv.
+#   EXCLUDE_NOT_TARGET  -> a real, understood diagnosis that is simply not one
+#                          of our four classes. Not an error.
+#   EXCLUDE_RECORD      -> the label's meaning is unresolved AND keeping the
+#                          record under any other label would risk a wrong
+#                          NEGATIVE on one of the four heads. The WHOLE RECORD
+#                          is dropped from the cohort, not just this label.
+#                          Stronger than EXCLUDE_UNCERTAIN. Use sparingly.
+#   NORMAL_DISQUALIFIER -> presence of this label forbids the record from being
+#                          labelled NORMAL (it does not by itself create a
+#                          positive target label).
+#   NORMAL_NEUTRAL      -> benign/technical finding that does NOT disqualify a
+#                          record from being NORMAL.
+#
+# Records are multi-label: one record may be ACCEPTed into more than one of
+# STEMI / AF / LVH. NORMAL is mutually exclusive with the other three by
+# construction (see `rules.normal` below).
+# =====================================================================
+
+version: 1
+generated_for: "CardioSentry thesis dataset construction"
+
+# ---------------------------------------------------------------------
+# Global rules
+# ---------------------------------------------------------------------
+rules:
+  normal:
+    # A record becomes NORMAL=1 only if ALL of these hold:
+    #   1. the source carries a positive normal assertion (see per-source
+    #      `normal_assertion` below), AND
+    #   2. it carries NO label with status NORMAL_DISQUALIFIER, AND
+    #   3. it carries NO ACCEPTed STEMI / AF / LVH label.
+    require_positive_normal_assertion: true
+    forbid_disqualifiers: true
+    forbid_target_positives: true
+
+  ambiguity:
+    # NORMAL together with any pathological target is contradictory.
+    # Such records are NOT silently resolved: they are written to
+    # ambiguity_report.csv and, per `on_conflict`, handled as declared.
+    #   drop_normal  -> keep the pathological label(s), set NORMAL=0
+    #   exclude      -> drop the record entirely
+    on_conflict: drop_normal
+    # A record with no positive label at all after mapping is not an error;
+    # it is simply not a candidate and is reported as EXCLUDE_NOT_TARGET.
+
+  ptbxl_likelihood:
+    # PTB-XL scp_codes values are annotator likelihoods (0-100).
+    #
+    # IMPORTANT, VERIFIED FROM THE DATA: *rhythm* statements (AFIB, SR, ...)
+    # carry likelihood 0.0 in 1466 / 1514 AFIB records. In PTB-XL a 0 on a
+    # rhythm statement means "no likelihood was recorded", NOT "absent".
+    # Filtering rhythm statements on likelihood > 0 would silently destroy
+    # 97% of the AF class. Therefore the threshold below is applied ONLY to
+    # diagnostic statements (LVH, NORM), never to rhythm statements.
+    apply_to_rhythm_statements: false
+    # Minimum likelihood for a *diagnostic* statement to be ACCEPTed.
+    # 0 = accept any recorded diagnostic statement (PTB-XL default behaviour,
+    # and what the published PTB-XL benchmark tasks do).
+    # Raise to e.g. 50 or 80 for a higher-confidence, smaller cohort.
+    min_diagnostic_likelihood: 0
+    # Recorded per-record in the harmonized metadata regardless, so you can
+    # re-filter downstream without re-running extraction.
+
+# ---------------------------------------------------------------------
+# SOURCE 1: 2026 ACS/STEMI dataset
+# ---------------------------------------------------------------------
+# This source is a tabular ACS cohort with one binary column per finding.
+# Only `train.csv` carries diagnostic columns; `test.csv` has none and is
+# therefore unlabelable and excluded wholesale.
+#
+# The `STEMI` column is an explicit, dedicated STEMI flag assigned by the
+# source. It is the ONLY column accepted as STEMI. Every other column is an
+# angiographic / interventional / alternative-ACS finding and is explicitly
+# NOT converted to STEMI, per the project's clinical rules.
+sources:
+  stemi:
+    name: "2026 ACS/STEMI dataset"
+    label_type: binary_columns
+    label_file: "CSV/train.csv"
+    # Columns that are metadata, not diagnoses
+    metadata_columns: [Patient_id, ecg_row_record, ecg_med_record, gender, age, Time_Interval]
+
+    # This source is an ACS-referral cohort. A record that is STEMI-negative
+    # is NOT a healthy control -- it is a different acute coronary syndrome.
+    # Therefore this source contributes NO NORMAL records, ever.
+    normal_assertion: null
+    contributes_classes: [STEMI]
+
+    labels:
+      STEMI:
+        maps_to: STEMI
+        status: ACCEPT
+        reason: >
+          Dedicated, explicit STEMI column in the source's own labelling
+          schema. This is the only label in any of the three datasets that
+          asserts ST-elevation myocardial infarction directly. 1442 positives.
+
+      NSTEMI:
+        maps_to: null
+        status: EXCLUDE_NOT_TARGET
+        reason: >
+          Non-ST-elevation MI is by definition NOT STEMI. Mapping it to STEMI
+          would invert the very distinction the model must learn.
+
+      AMI:
+        maps_to: null
+        status: EXCLUDE_NOT_TARGET
+        reason: >
+          Acute myocardial infarction, unspecified type. Covers both STEMI and
+          NSTEMI presentations; the source records STEMI separately, so AMI
+          alone carries no ST-elevation evidence. Verified in data: AMI=1
+          occurs in 2679 records of which only a subset are STEMI=1.
+
+      OMI:
+        maps_to: null
+        status: EXCLUDE_NOT_TARGET
+        reason: >
+          Old/prior myocardial infarction (and, in some ACS literature,
+          "occlusion MI"). Ambiguous and in neither reading equivalent to an
+          acute ST-elevation ECG. Explicitly excluded by project rules.
+
+      UA:
+        maps_to: null
+        status: EXCLUDE_NOT_TARGET
+        reason: "Unstable angina -- ACS without infarction. Not STEMI."
+
+      CTO:
+        maps_to: null
+        status: EXCLUDE_NOT_TARGET
+        reason: "Chronic total occlusion -- an angiographic finding, not an ECG diagnosis."
+
+      PCI:        {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Percutaneous coronary intervention performed -- a treatment, not a diagnosis."}
+      Prior_PCI:  {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "History of prior PCI -- clinical history, not an ECG diagnosis."}
+      LM:         {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Left main coronary lesion -- angiographic culprit-vessel location."}
+      PLAD:       {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Proximal LAD lesion -- angiographic culprit-vessel location."}
+      MLAD:       {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Mid LAD lesion -- angiographic culprit-vessel location."}
+      DLAD:       {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Distal LAD lesion -- angiographic culprit-vessel location."}
+      DB:         {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Diagonal branch lesion -- angiographic culprit-vessel location."}
+      PLCX:       {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Proximal LCx lesion -- angiographic culprit-vessel location."}
+      MLCX:       {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Mid LCx lesion -- angiographic culprit-vessel location."}
+      DLCX:       {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Distal LCx lesion -- angiographic culprit-vessel location."}
+      OM:         {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Obtuse marginal lesion -- angiographic culprit-vessel location."}
+      PRCA:       {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Proximal RCA lesion -- angiographic culprit-vessel location."}
+      MRCA:       {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Mid RCA lesion -- angiographic culprit-vessel location."}
+      DRCA:       {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Distal RCA lesion -- angiographic culprit-vessel location."}
+      VF_VT:      {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Ventricular fibrillation / tachycardia -- a distinct arrhythmia, not AF."}
+      Paced:      {maps_to: null, status: EXCLUDE_NOT_TARGET, reason: "Paced rhythm. Not a target class. Recorded so it can be filtered downstream."}
+
+  # -------------------------------------------------------------------
+  # SOURCE 2: PTB-XL v1.0.3
+  # -------------------------------------------------------------------
+  # Labels are SCP-ECG statement codes in the `scp_codes` dict column.
+  # Statement roles (diagnostic / form / rhythm) are read from
+  # scp_statements.csv at runtime -- not hard-coded here.
+  #
+  # PTB-XL CONTRIBUTES NO STEMI. Verified: the SCP-ECG vocabulary used by
+  # PTB-XL has no ST-elevation-MI statement. Its MI codes (IMI, ASMI, AMI,
+  # ALMI, ILMI, LMI, PMI, IPMI, IPLMI) encode infarct *location*, not ST
+  # elevation, and its acuity information lives in a separate free-text-ish
+  # `infarction_stadium1/2` field (Stadium I..III). Deriving STEMI from
+  # "MI code + Stadium I" would be an inference, not a label -- exactly what
+  # the project rules forbid. All MI codes are therefore
+  # EXCLUDE_UNCERTAIN for STEMI and NORMAL_DISQUALIFIER for NORMAL.
+  ptbxl:
+    name: "PTB-XL v1.0.3"
+    label_type: scp_codes
+    normal_assertion: "NORM"          # positive "normal ECG" statement
+    contributes_classes: [AF, LVH, NORMAL]
+
+    labels:
+      # ---- ACCEPTED ----
+      NORM:
+        maps_to: NORMAL
+        status: ACCEPT
+        reason: >
+          SCP statement "normal ECG" (diagnostic_class NORM). This is a
+          positive assertion of normality by the reporting cardiologist,
+          not merely a rhythm observation. Subject to rules.normal:
+          9514 records carry NORM, but 445 of them also carry another
+          diagnostic statement and 37 also carry AFIB -- those are
+          disqualified / reported as ambiguous rather than accepted.
+
+      AFIB:
+        maps_to: AF
+        status: ACCEPT
+        reason: >
+          SCP rhythm statement "atrial fibrillation" -- an unambiguous,
+          direct assertion of AF. 1514 records. NOTE: 1466 of these carry
+          likelihood 0.0, which for PTB-XL rhythm statements means
+          "unscored", not "absent" -- see rules.ptbxl_likelihood.
+
+      LVH:
+        maps_to: LVH
+        status: ACCEPT
+        reason: >
+          SCP diagnostic statement "left ventricular hypertrophy"
+          (diagnostic_class HYP, diagnostic_subclass LVH). A diagnostic-level
+          LVH assertion, not a voltage-criterion observation. 2132 records.
+
+      # ---- EXPLICITLY REFUSED NEAR-MISSES ----
+      VCLVH:
+        maps_to: null
+        status: EXCLUDE_UNCERTAIN
+        reason: >
+          "Voltage criteria (QRS) for left ventricular hypertrophy".
+          VERIFIED from scp_statements.csv: this is a FORM statement
+          (form=1, diagnostic=NaN, no diagnostic_class) -- it records a
+          voltage measurement, not an LVH diagnosis. PTB-XL's own annotators
+          kept it distinct from LVH. The project rules explicitly forbid
+          mapping "nonspecific voltage abnormalities" to LVH. 875 records.
+          Flip to ACCEPT/LVH only if you decide voltage criteria alone should
+          count -- and document that choice in your thesis if you do.
+        also: NORMAL_DISQUALIFIER
+
+      AFLT:
+        maps_to: null
+        status: EXCLUDE_UNCERTAIN
+        reason: >
+          Atrial flutter. A distinct macro-reentrant atrial arrhythmia with a
+          different ECG morphology (sawtooth flutter waves, often regular
+          ventricular response). Explicitly excluded from AF by project rules.
+          73 records.
+        also: NORMAL_DISQUALIFIER
+
+      SVTAC: {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Supraventricular tachycardia -- not AF."}
+      PSVT:  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Paroxysmal SVT -- not AF."}
+      SVARR: {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Supraventricular arrhythmia, unspecified -- 'unspecified irregular rhythm', excluded from AF by project rules."}
+      RVH:   {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Right ventricular hypertrophy -- a different chamber. Not LVH."}
+      SEHYP: {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Septal hypertrophy -- not left-ventricular hypertrophy. Project rules forbid mapping unrelated hypertrophy to LVH."}
+      LAO/LAE: {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Left atrial overload/enlargement -- atrial, not ventricular."}
+      RAO/RAE: {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Right atrial overload/enlargement -- atrial, not ventricular."}
+
+      # ---- MI FAMILY: never STEMI, always disqualifies NORMAL ----
+      IMI:   {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Inferior MI -- location only, no ST-elevation assertion. Not mappable to STEMI."}
+      ASMI:  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Anteroseptal MI -- location only. Not mappable to STEMI."}
+      AMI:   {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Anterior MI -- location only. Not mappable to STEMI."}
+      ALMI:  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Anterolateral MI -- location only. Not mappable to STEMI."}
+      ILMI:  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Inferolateral MI -- location only. Not mappable to STEMI."}
+      LMI:   {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Lateral MI -- location only. Not mappable to STEMI."}
+      PMI:   {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Posterior MI -- location only. Not mappable to STEMI."}
+      IPMI:  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Inferoposterior MI -- location only. Not mappable to STEMI."}
+      IPLMI: {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Inferoposterolateral MI -- location only. Not mappable to STEMI."}
+      INJAS: {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Subendocardial injury, anteroseptal. SUBendocardial injury is the electrophysiological opposite of transmural ST-elevation. Never STEMI."}
+      INJAL: {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Subendocardial injury, anterolateral. Never STEMI."}
+      INJIN: {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Subendocardial injury, inferior. Never STEMI."}
+      INJIL: {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Subendocardial injury, inferolateral. Never STEMI."}
+      INJLA: {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Subendocardial injury, lateral. Never STEMI."}
+      STE_:  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "'Non-specific ST elevation' -- a FORM statement. ST elevation alone is not STEMI (cf. early repolarisation, pericarditis, LVH strain, LBBB). Mapping this to STEMI is exactly the error the project rules forbid."}
+
+      # ---- BENIGN / TECHNICAL: do NOT disqualify NORMAL ----
+      SR:    {maps_to: null, status: NORMAL_NEUTRAL, reason: "Sinus rhythm -- the expected baseline rhythm. Neutral: does NOT by itself make a record NORMAL (project rules), and does not disqualify it."}
+      SBRAD: {maps_to: null, status: NORMAL_NEUTRAL, reason: "Sinus bradycardia -- a rate observation, common in healthy/athletic subjects. Does not disqualify an otherwise-NORM ECG."}
+      STACH: {maps_to: null, status: NORMAL_NEUTRAL, reason: "Sinus tachycardia -- a rate observation (pain, anxiety, exertion). Does not disqualify an otherwise-NORM ECG."}
+      SARRH: {maps_to: null, status: NORMAL_NEUTRAL, reason: "Sinus arrhythmia -- physiological respiratory variation. Benign."}
+
+  # -------------------------------------------------------------------
+  # SOURCE 3: Chapman-Shaoxing / Ningbo 12-lead ECG database
+  # -------------------------------------------------------------------
+  # Labels are SNOMED-CT concept ids in the `#Dx:` comment of each .hea file.
+  #
+  # VERIFIED BY SCANNING ALL 45,019 HEADERS: the data uses 94 distinct SNOMED
+  # codes, but the shipped ConditionNames_SNOMED-CT.csv defines only 55.
+  # 39 codes in the data have NO definition in the distribution. Any code not
+  # listed below is auto-assigned EXCLUDE_UNKNOWN_CODE and reported --
+  # never guessed. See `unknown_code_policy`.
+  #
+  # THIS SOURCE CONTRIBUTES NO STEMI: no ST-elevation-MI concept exists in
+  # its vocabulary.
+  chapman:
+    name: "Chapman-Shaoxing / Ningbo 12-lead ECG database"
+    label_type: snomed_ct
+    normal_assertion: "426783006"     # Sinus Rhythm -- see caveat below
+    contributes_classes: [AF, LVH, NORMAL]
+
+    # An unknown SNOMED code is treated as a potential pathology: it cannot
+    # create a target label, and it DOES disqualify NORMAL (conservative --
+    # we must not call a record normal on the strength of a code we cannot
+    # read). Both behaviours are declared here rather than hidden in code.
+    unknown_code_policy:
+      status: EXCLUDE_UNKNOWN_CODE
+      disqualifies_normal: true
+
+    # Chapman has no "normal ECG" statement at all. The closest positive
+    # assertion is Sinus Rhythm (426783006). Per project rules, sinus rhythm
+    # ALONE is not sufficient: a record is NORMAL only if it is SR *and*
+    # carries no other code except those marked NORMAL_NEUTRAL below.
+    # VERIFIED: 8102 records carry SR; only 5890 carry SR and nothing else.
+
+    labels:
+      # ---- ACCEPTED ----
+      "164889003":
+        acronym: AFIB
+        name: "Atrial Fibrillation"
+        maps_to: AF
+        status: ACCEPT
+        reason: >
+          SNOMED-CT 164889003 "Atrial fibrillation", defined as AFIB in the
+          dataset's own ConditionNames_SNOMED-CT.csv. Unambiguous. 1774 records.
+          VERIFIED: never co-occurs with atrial flutter (0 records) or with
+          sinus rhythm (0 records) in this dataset -- internally consistent.
+
+      "164873001":
+        acronym: LVH
+        name: "left ventricle hypertrophy"
+        maps_to: LVH
+        status: ACCEPT
+        reason: >
+          SNOMED-CT 164873001 "Left ventricular hypertrophy", defined as LVH
+          in the dataset's own ConditionNames_SNOMED-CT.csv. 645 records --
+          this is the ONLY LVH code the distribution documents.
+
+      "426783006":
+        acronym: SR
+        name: "Sinus Rhythm"
+        maps_to: null
+        status: NORMAL_NEUTRAL
+        reason: >
+          Sinus rhythm. Used as this source's `normal_assertion`, but per
+          project rules is NOT sufficient on its own -- the record must also
+          carry no other non-neutral code. 8102 carry SR; 5890 are SR-only.
+
+      # ---- THE ONE HIGH-IMPACT OPEN DECISION ----
+      "55827005":
+        acronym: null
+        name: "UNDEFINED IN THIS DISTRIBUTION -- evidence indicates LVH"
+        maps_to: null
+        status: EXCLUDE_RECORD
+        disqualifies_normal: true
+        reason: >
+          SNOMED-CT 55827005 occurs in 5384 Chapman/Ningbo records (12% of the
+          database) but is NOT defined in the shipped ConditionNames_SNOMED-CT.csv.
+
+          EMPIRICAL INVESTIGATION (see README section 6). Signal-level testing
+          indicates this code IS left ventricular hypertrophy:
+            * Sokolow-Lyon voltage, measured from the waveforms: median 3.73 mV
+              with 63.6% exceeding the 3.5 mV LVH threshold. PTB-XL's own
+              diagnostic LVH statement scores 3.59 mV / 53.8% -- i.e. these
+              records are indistinguishable from confirmed LVH annotated by a
+              different institution in a different country.
+            * Two independent control groups (Chapman sinus-rhythm-only, PTB-XL
+              NORM) both sit at ~2.2 mV / ~3%, cross-validating the measurement.
+            * Confounder "sick older patients" excluded: comorbidity-matched
+              flutter patients without either LVH code score 2.22 mV / 8.8%.
+            * Confounder "LBBB" excluded: QRS duration 70 ms, identical to
+              normals (70 ms) and LVH (74 ms), versus 148 ms for confirmed CLBBB.
+
+          DECISION: the records are nevertheless EXCLUDED ENTIRELY, because the
+          evidence is behavioural rather than documentary -- the distribution
+          still does not define the code, and no clinician has signed it off.
+          EXCLUDE_RECORD (not EXCLUDE_UNCERTAIN) is used deliberately: leaving
+          these records in the cohort under some other label would silently
+          assert LVH=0 on ~370 recordings that most likely DO have LVH, which
+          would train the LVH head against the truth. Dropping the records
+          forfeits data but asserts nothing false.
+
+          COST: removes ~5384 records from the candidate pool, of which ~370
+          would otherwise have been kept (mostly as AF). AF falls from 3107 to
+          roughly 2741 valid records; LVH is essentially unchanged.
+
+          TO ACCEPT IT AS LVH once a clinician confirms the code, set:
+              maps_to: LVH
+              status: ACCEPT
+          which raises Chapman LVH from 645 to ~6027 and total LVH to ~8159.
+
+      # ---- EXPLICITLY REFUSED NEAR-MISSES ----
+      "164890007":
+        acronym: AF
+        name: "Atrial Flutter"
+        maps_to: null
+        status: EXCLUDE_UNCERTAIN
+        disqualifies_normal: true
+        reason: >
+          *** NAMING TRAP: the acronym "AF" in this dataset means ATRIAL
+          FLUTTER, not atrial fibrillation. *** 8036 records. Mapping this
+          acronym to CardioSentry AF would inject 8036 flutter ECGs into the
+          AF class -- more than four times the true AF count -- and is
+          explicitly forbidden by the project rules. Atrial fibrillation is
+          164889003.
+
+      "426761007": {acronym: SVT,   name: "Supraventricular Tachycardia", maps_to: null, status: EXCLUDE_UNCERTAIN, disqualifies_normal: true, reason: "SVT -- not AF. Excluded by project rules."}
+      "713422000": {acronym: AT,    name: "Atrial Tachycardia",           maps_to: null, status: EXCLUDE_UNCERTAIN, disqualifies_normal: true, reason: "Atrial tachycardia -- an organised atrial arrhythmia, not AF."}
+      "233897008": {acronym: AVRT,  name: "Atrioventricular Reentrant Tachycardia", maps_to: null, status: EXCLUDE_UNCERTAIN, disqualifies_normal: true, reason: "AVRT -- not AF."}
+      "427393009": {acronym: SA,    name: "Sinus Irregularity",           maps_to: null, status: EXCLUDE_UNCERTAIN, disqualifies_normal: true, reason: "Sinus irregularity -- an 'unspecified irregular rhythm'. Explicitly excluded from AF by project rules."}
+      "195101003": {acronym: SAAWR, name: "Sinus Atrium to Atrial Wandering Rhythm", maps_to: null, status: EXCLUDE_UNCERTAIN, disqualifies_normal: true, reason: "Wandering atrial pacemaker -- irregular but not AF."}
+      "89792004":  {acronym: RVH,   name: "right ventricle hypertrophy",  maps_to: null, status: EXCLUDE_NOT_TARGET, disqualifies_normal: true, reason: "Right ventricular hypertrophy -- different chamber. Not LVH."}
+      "446358003": {acronym: RAH,   name: "right atrial hypertrophy",     maps_to: null, status: EXCLUDE_NOT_TARGET, disqualifies_normal: true, reason: "Right atrial hypertrophy -- atrial, not ventricular. Not LVH."}
+      "251146004": {acronym: LVQRSAL, name: "lower voltage QRS in all lead", maps_to: null, status: EXCLUDE_NOT_TARGET, disqualifies_normal: true, reason: "Low QRS voltage -- a voltage abnormality, and the OPPOSITE of the high-voltage pattern of LVH."}
+      "164865005": {acronym: MISW,  name: "Myocardial infraction in the side wall", maps_to: null, status: EXCLUDE_UNCERTAIN, disqualifies_normal: true, reason: "Lateral-wall MI -- location only, no ST-elevation or acuity assertion. Not mappable to STEMI."}
+      "164930006": {acronym: STE,   name: "ST extension",                 maps_to: null, status: EXCLUDE_UNCERTAIN, disqualifies_normal: true, reason: "ST elevation as a morphological finding. ST elevation alone is not STEMI. Not mappable."}
+      "429622005": {acronym: STDD,  name: "ST drop down",                 maps_to: null, status: EXCLUDE_NOT_TARGET, disqualifies_normal: true, reason: "ST depression -- not ST elevation, not STEMI."}
+      "428750005": {acronym: STTC,  name: "ST-T Change",                  maps_to: null, status: EXCLUDE_NOT_TARGET, disqualifies_normal: true, reason: "Non-specific ST-T change."}
+      "164917005": {acronym: AQW,   name: "abnormal Q wave",              maps_to: null, status: EXCLUDE_UNCERTAIN, disqualifies_normal: true, reason: "Q waves -- suggest prior/established infarction. Explicitly excluded from STEMI by project rules (Q-wave MI)."}
+
+      # ---- BENIGN / TECHNICAL: do NOT disqualify NORMAL ----
+      # Kept deliberately small and conservative. Everything not listed as
+      # NORMAL_NEUTRAL disqualifies NORMAL.
+      "251198002": {acronym: CR,  name: "colockwise rotation",         maps_to: null, status: NORMAL_NEUTRAL, reason: "Clockwise transition-zone rotation -- a positional/technical variant, not a pathology."}
+      "251199005": {acronym: CCR, name: "countercolockwise rotation",  maps_to: null, status: NORMAL_NEUTRAL, reason: "Counter-clockwise transition-zone rotation -- positional variant, not a pathology."}
+
+# ---------------------------------------------------------------------
+# Target class registry (used to build the multi-label columns)
+# ---------------------------------------------------------------------
+target_classes:
+  - STEMI
+  - AF
+  - LVH
+  - NORMAL

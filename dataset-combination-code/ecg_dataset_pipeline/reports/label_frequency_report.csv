@@ -1,0 +1,188 @@
+source,source_label,label_name,label_role,diagnostic_class,diagnostic_subclass,count,likelihood_distribution
+PTBXL,SR,sinus rhythm,rhythm,,,16748,0.0:16748
+PTBXL,NORM,normal ECG,diagnostic,NORM,NORM,9514,15.0:38|34.0:1|35.0:37|50.0:505|80.0:1761|100.0:7172
+PTBXL,ABQRS,abnormal QRS,form,,,3327,0.0:3327
+PTBXL,IMI,inferior myocardial infarction,diagnostic,MI,IMI,2676,15.0:868|35.0:94|50.0:551|80.0:141|100.0:1022
+PTBXL,ASMI,anteroseptal myocardial infarction,diagnostic,MI,AMI,2357,15.0:315|35.0:35|50.0:418|80.0:67|100.0:1522
+PTBXL,LVH,left ventricular hypertrophy,diagnostic,HYP,LVH,2132,15.0:193|35.0:188|50.0:579|80.0:87|100.0:1085
+PTBXL,NDT,non-diagnostic T abnormalities,diagnostic|form,STTC,STTC,1825,15.0:1|50.0:4|100.0:1820
+PTBXL,LAFB,left anterior fascicular block,diagnostic,CD,LAFB/LPFB,1623,15.0:1|50.0:18|80.0:24|100.0:1580
+PTBXL,AFIB,atrial fibrillation,rhythm,,,1514,0.0:1466|100.0:48
+PTBXL,ISC_,non-specific ischemic,diagnostic,STTC,ISC_,1272,15.0:5|35.0:7|50.0:119|80.0:22|100.0:1119
+PTBXL,PVC,ventricular premature complex,form,,,1143,0.0:116|100.0:1027
+PTBXL,IRBBB,incomplete right bundle branch block,diagnostic,CD,IRBBB,1118,35.0:3|50.0:13|80.0:28|100.0:1074
+PTBXL,STD_,non-specific ST depression,form,,,1009,0.0:1009
+PTBXL,VCLVH,voltage criteria (QRS) for left ventricular hypertrophy,form,,,875,0.0:875
+PTBXL,STACH,sinus tachycardia,rhythm,,,826,0.0:822|50.0:2|80.0:1|100.0:1
+PTBXL,1AVB,first degree AV block,diagnostic,CD,_AVB,793,10.0:1|15.0:2|50.0:11|100.0:779
+PTBXL,IVCD,non-specific intraventricular conduction disturbance (block),diagnostic,CD,IVCD,787,50.0:7|80.0:4|100.0:776
+PTBXL,SARRH,sinus arrhythmia,rhythm,,,772,0.0:772
+PTBXL,NST_,non-specific ST changes,diagnostic|form,STTC,NST_,767,0.0:208|15.0:1|35.0:1|50.0:21|80.0:5|100.0:531
+PTBXL,ISCAL,ischemic in anterolateral leads,diagnostic,STTC,ISCA,659,15.0:3|35.0:2|50.0:126|80.0:5|100.0:523
+PTBXL,SBRAD,sinus bradycardia,rhythm,,,637,0.0:637
+PTBXL,QWAVE,Q waves present,form,,,548,0.0:548
+PTBXL,CRBBB,complete right bundle branch block,diagnostic,CD,CRBBB,541,30.0:1|50.0:3|80.0:1|100.0:536
+PTBXL,CLBBB,complete left bundle branch block,diagnostic,CD,CLBBB,536,80.0:1|100.0:535
+PTBXL,ILMI,inferolateral myocardial infarction,diagnostic,MI,IMI,478,15.0:54|35.0:8|50.0:74|80.0:11|100.0:331
+PTBXL,LOWT,low amplitude T-waves,form,,,438,0.0:438
+PTBXL,LAO/LAE,left atrial overload/enlargement,diagnostic,HYP,LAO/LAE,426,15.0:1|35.0:10|50.0:94|80.0:8|100.0:313
+PTBXL,NT_,non-specific T-wave changes,form,,,423,0.0:423
+PTBXL,PAC,atrial premature complex,form,,,398,0.0:361|100.0:37
+PTBXL,AMI,anterior myocardial infarction,diagnostic,MI,AMI,353,15.0:131|35.0:9|50.0:90|80.0:7|100.0:116
+PTBXL,LPR,prolonged PR interval,form,,,340,0.0:340
+PTBXL,PACE,normal functioning artificial pacemaker,rhythm,,,294,0.0:7|100.0:287
+PTBXL,INVT,inverted T-waves,form,,,294,0.0:294
+PTBXL,ALMI,anterolateral myocardial infarction,diagnostic,MI,AMI,288,15.0:36|35.0:6|50.0:41|80.0:5|100.0:200
+PTBXL,ISCIN,ischemic in inferior leads,diagnostic,STTC,ISCI,218,15.0:4|35.0:1|50.0:43|80.0:10|100.0:160
+PTBXL,INJAS,subendocardial injury in anteroseptal leads,diagnostic,MI,AMI,214,15.0:2|50.0:16|100.0:196
+PTBXL,LMI,lateral myocardial infarction,diagnostic,MI,LMI,201,14.0:1|15.0:75|35.0:3|50.0:64|80.0:1|100.0:57
+PTBXL,LVOLT,low QRS voltages in the frontal and horizontal leads,form,,,182,0.0:182
+PTBXL,DIG,digitalis-effect,diagnostic|form,STTC,STTC,181,0.0:4|35.0:2|50.0:41|80.0:19|100.0:115
+PTBXL,ISCIL,ischemic in inferolateral leads,diagnostic,STTC,ISCI,179,15.0:1|50.0:54|80.0:1|100.0:123
+PTBXL,LPFB,left posterior fascicular block,diagnostic,CD,LAFB/LPFB,177,50.0:3|100.0:174
+PTBXL,ISCAS,ischemic in anteroseptal leads,diagnostic,STTC,ISCA,169,35.0:1|50.0:15|80.0:3|100.0:150
+PTBXL,SVARR,supraventricular arrhythmia,rhythm,,,157,0.0:157
+PTBXL,INJAL,subendocardial injury in anterolateral leads,diagnostic,MI,AMI,145,15.0:1|35.0:1|50.0:10|100.0:133
+PTBXL,ISCLA,ischemic in lateral leads,diagnostic,STTC,ISCA,140,35.0:1|50.0:19|80.0:2|100.0:118
+PTBXL,RVH,right ventricular hypertrophy,diagnostic,HYP,RVH,126,15.0:9|35.0:5|50.0:56|80.0:1|100.0:55
+PTBXL,LNGQT,long QT-interval,diagnostic|form,STTC,STTC,117,0.0:1|50.0:4|80.0:2|100.0:110
+PTBXL,ANEUR,ST-T changes compatible with ventricular aneurysm,diagnostic,STTC,STTC,104,35.0:2|50.0:89|100.0:13
+PTBXL,RAO/RAE,right atrial overload/enlargement,diagnostic,HYP,RAO/RAE,99,35.0:1|50.0:15|80.0:1|100.0:82
+PTBXL,EL,electrolytic disturbance or drug (former EDIS),diagnostic,STTC,STTC,96,50.0:82|80.0:2|100.0:12
+PTBXL,BIGU,"bigeminal pattern (unknown origin, SV or Ventricular)",rhythm,,,82,0.0:58|100.0:24
+PTBXL,WPW,Wolf-Parkinson-White syndrome,diagnostic,CD,WPW,79,50.0:9|100.0:70
+PTBXL,ILBBB,incomplete left bundle branch block,diagnostic,CD,ILBBB,77,15.0:1|50.0:2|100.0:74
+PTBXL,AFLT,atrial flutter,rhythm,,,73,0.0:17|100.0:56
+PTBXL,HVOLT,high QRS voltage,form,,,62,0.0:62
+PTBXL,IPLMI,inferoposterolateral myocardial infarction,diagnostic,MI,IMI,51,15.0:5|50.0:15|100.0:31
+PTBXL,ISCAN,ischemic in anterior leads,diagnostic,STTC,ISCA,44,50.0:5|100.0:39
+PTBXL,TAB_,T-wave abnormality,form,,,35,0.0:35
+PTBXL,IPMI,inferoposterior myocardial infarction,diagnostic,MI,IMI,33,50.0:4|80.0:1|100.0:28
+PTBXL,SEHYP,septal hypertrophy,diagnostic,HYP,SEHYP,29,50.0:11|80.0:1|100.0:17
+PTBXL,STE_,non-specific ST elevation,form,,,28,0.0:28
+PTBXL,SVTAC,supraventricular tachycardia,rhythm,,,27,0.0:27
+PTBXL,PSVT,paroxysmal supraventricular tachycardia,rhythm,,,24,100.0:24
+PTBXL,TRIGU,"trigeminal pattern (unknown origin, SV or Ventricular)",rhythm,,,20,0.0:20
+PTBXL,INJIN,subendocardial injury in inferior leads,diagnostic,MI,IMI,18,50.0:1|100.0:17
+PTBXL,INJLA,subendocardial injury in lateral leads,diagnostic,MI,AMI,17,15.0:1|50.0:2|100.0:14
+PTBXL,PMI,posterior myocardial infarction,diagnostic,MI,PMI,17,15.0:4|50.0:9|100.0:4
+PTBXL,3AVB,third degree AV block,diagnostic,CD,_AVB,16,50.0:1|100.0:15
+PTBXL,INJIL,subendocardial injury in inferolateral leads,diagnostic,MI,IMI,15,100.0:15
+PTBXL,2AVB,second degree AV block,diagnostic,CD,_AVB,14,100.0:14
+PTBXL,PRC(S),premature complex(es),form,,,10,0.0:10
+CHAPMAN,426177001,Sinus Bradycardia,SNOMED-CT concept,SB,,16514,
+CHAPMAN,426783006,Sinus Rhythm,SNOMED-CT concept,SR,,8102,
+CHAPMAN,164890007,Atrial Flutter,SNOMED-CT concept,AF,,8036,
+CHAPMAN,427084000,Sinus Tachycardia,SNOMED-CT concept,ST,,7231,
+CHAPMAN,164934002,T wave Change,SNOMED-CT concept,TWC,,7024,
+CHAPMAN,55827005,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,5384,
+CHAPMAN,55930002,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,4216,
+CHAPMAN,59931005,T wave opposite,SNOMED-CT concept,TWO,,2871,
+CHAPMAN,427393009,Sinus Irregularity,SNOMED-CT concept,SA,,2544,
+CHAPMAN,164889003,Atrial Fibrillation,SNOMED-CT concept,AFIB,,1774,
+CHAPMAN,429622005,ST drop down,SNOMED-CT concept,STDD,,1664,
+CHAPMAN,39732003,Axis left shift,SNOMED-CT concept,ALS,,1540,
+CHAPMAN,284470004,atrial premature beats,SNOMED-CT concept,APB,,1303,
+CHAPMAN,10370003,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,1180,
+CHAPMAN,428750005,ST-T Change,SNOMED-CT concept,STTC,,1153,
+CHAPMAN,270492004,1 degree atrioventricular block,SNOMED-CT concept,1AVB,,1136,
+CHAPMAN,713427006,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,1094,
+CHAPMAN,427172004,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,1089,
+CHAPMAN,164917005,abnormal Q wave,SNOMED-CT concept,AQW,,1061,
+CHAPMAN,251146004,lower voltage QRS in all lead,SNOMED-CT concept,LVQRSAL,,1038,
+CHAPMAN,47665007,Axis right shift,SNOMED-CT concept,ARS,,853,
+CHAPMAN,164930006,ST extension,SNOMED-CT concept,STE,,800,
+CHAPMAN,698252002,Intraventricular block,SNOMED-CT concept,IVB,,768,
+CHAPMAN,426761007,Supraventricular Tachycardia,SNOMED-CT concept,SVT,,724,
+CHAPMAN,61721007,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,652,
+CHAPMAN,59118001,right bundle branch block,SNOMED-CT concept,RBBB,,647,
+CHAPMAN,164873001,left ventricle hypertrophy,SNOMED-CT concept,LVH,,645,
+CHAPMAN,365413008,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,635,
+CHAPMAN,111975006,QT interval extension,SNOMED-CT concept,QTIE,,394,
+CHAPMAN,6374002,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,382,
+CHAPMAN,445118002,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,380,
+CHAPMAN,428417006,Early repolarization of the ventricles,SNOMED-CT concept,ERV,,366,
+CHAPMAN,17338001,ventricular premature beat,SNOMED-CT concept,VPB,,294,
+CHAPMAN,713422000,Atrial Tachycardia,SNOMED-CT concept,AT,,294,
+CHAPMAN,713426002,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,246,
+CHAPMAN,233917008,atrioventricular block,SNOMED-CT concept,AVB,,242,
+CHAPMAN,164909002,left front bundle branch block,SNOMED-CT concept,LFBBB,,239,
+CHAPMAN,251223006,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,215,
+CHAPMAN,733534002,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,211,
+CHAPMAN,106068003,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,211,
+CHAPMAN,164931005,ST tilt up,SNOMED-CT concept,STTU,,176,
+CHAPMAN,251199005,countercolockwise rotation,SNOMED-CT concept,CCR,,162,
+CHAPMAN,164912004,P wave Change,SNOMED-CT concept,PWC,,142,
+CHAPMAN,29320008,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,139,
+CHAPMAN,164937009,U wave,SNOMED-CT concept,UW,,136,
+CHAPMAN,164865005,Myocardial infraction in the side wall,SNOMED-CT concept,MISW,,123,
+CHAPMAN,13640000,ventricular fusion wave,SNOMED-CT concept,VFW,,116,
+CHAPMAN,89792004,right ventricle hypertrophy,SNOMED-CT concept,RVH,,110,
+CHAPMAN,425856008,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,109,
+CHAPMAN,251205003,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,106,
+CHAPMAN,81898007,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,95,
+CHAPMAN,251198002,colockwise rotation,SNOMED-CT concept,CR,,76,
+CHAPMAN,27885002,3 degree atrioventricular block,SNOMED-CT concept,3AVB,,76,
+CHAPMAN,426995002,junctional escape beat,SNOMED-CT concept,JEB,,75,
+CHAPMAN,74390002,WPW,SNOMED-CT concept,WPW,,72,
+CHAPMAN,195042002,2 degree atrioventricular block,SNOMED-CT concept,2AVB,,66,
+CHAPMAN,251170000,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,61,
+CHAPMAN,50799005,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,59,
+CHAPMAN,164896001,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,59,
+CHAPMAN,54329005,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,57,
+CHAPMAN,75532003,ventricular escape beat,SNOMED-CT concept,VEB,,56,
+CHAPMAN,164947007,PR interval extension,SNOMED-CT concept,PRIE,,52,
+CHAPMAN,57054005,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,49,
+CHAPMAN,446358003,right atrial hypertrophy,SNOMED-CT concept,RAH,,36,
+CHAPMAN,67751000119106,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,36,
+CHAPMAN,5609005,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,33,
+CHAPMAN,54016002,2 degree atrioventricular block(Type one),SNOMED-CT concept,2AVB1,,31,
+CHAPMAN,233897008,Atrioventricular Reentrant Tachycardia,SNOMED-CT concept,AVRT,,26,
+CHAPMAN,426648003,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,24,
+CHAPMAN,49578007,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,23,
+CHAPMAN,251187003,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,17,
+CHAPMAN,251166008,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,16,
+CHAPMAN,233892002,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,15,
+CHAPMAN,61277005,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,14,
+CHAPMAN,195060002,ventricular preexcitation,SNOMED-CT concept,VPE,,12,
+CHAPMAN,426664006,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,12,
+CHAPMAN,251164006,junctional premature beat,SNOMED-CT concept,JPT,,11,
+CHAPMAN,63593006,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,9,
+CHAPMAN,251180001,ventricular escape trigeminy,SNOMED-CT concept,VET,,8,
+CHAPMAN,446813000,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,8,
+CHAPMAN,17366009,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,7,
+CHAPMAN,426627000,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,7,
+CHAPMAN,111288001,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,7,
+CHAPMAN,426183003,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,7,
+CHAPMAN,251120003,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,6,
+CHAPMAN,65778007,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,5,
+CHAPMAN,445211001,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,5,
+CHAPMAN,418818005,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,5,
+CHAPMAN,251173003,atrial bigeminy,SNOMED-CT concept,ABI,,3,
+CHAPMAN,164942001,fQRS Wave,SNOMED-CT concept,FQRS,,3,
+CHAPMAN,11157007,ventricular bigeminy,SNOMED-CT concept,VB,,3,
+CHAPMAN,195101003,Sinus Atrium to Atrial Wandering Rhythm,SNOMED-CT concept,SAAWR,,2,
+CHAPMAN,77867006,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,2,
+CHAPMAN,67741000119109,*** NOT DEFINED IN DISTRIBUTION ***,SNOMED-CT concept,,,1,
+STEMI,UA,UA,binary diagnostic column,,,6213,
+STEMI,PCI,PCI,binary diagnostic column,,,4541,
+STEMI,AMI,AMI,binary diagnostic column,,,2679,
+STEMI,STEMI,STEMI,binary diagnostic column,,,1442,
+STEMI,Prior_PCI,Prior_PCI,binary diagnostic column,,,1323,
+STEMI,NSTEMI,NSTEMI,binary diagnostic column,,,1235,
+STEMI,OMI,OMI,binary diagnostic column,,,1151,
+STEMI,CTO,CTO,binary diagnostic column,,,957,
+STEMI,VF_VT,VF_VT,binary diagnostic column,,,869,
+STEMI,Paced,Paced,binary diagnostic column,,,338,
+STEMI,PLAD,PLAD,binary diagnostic column,,,284,
+STEMI,PRCA,PRCA,binary diagnostic column,,,208,
+STEMI,MRCA,MRCA,binary diagnostic column,,,136,
+STEMI,PLCX,PLCX,binary diagnostic column,,,134,
+STEMI,DRCA,DRCA,binary diagnostic column,,,125,
+STEMI,MLAD,MLAD,binary diagnostic column,,,116,
+STEMI,MLCX,MLCX,binary diagnostic column,,,86,
+STEMI,DLCX,DLCX,binary diagnostic column,,,69,
+STEMI,DB,DB,binary diagnostic column,,,35,
+STEMI,OM,OM,binary diagnostic column,,,13,
+STEMI,DLAD,DLAD,binary diagnostic column,,,12,
+STEMI,LM,LM,binary diagnostic column,,,5,

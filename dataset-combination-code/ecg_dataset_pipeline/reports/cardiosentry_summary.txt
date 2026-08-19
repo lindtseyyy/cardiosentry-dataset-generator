@@ -1,0 +1,40 @@
+=== CARDIOSENTRY DATASET SUMMARY ===
+
+STEMI:
+  Candidate: 1442
+  Valid: 1442
+
+AF:
+  Candidate: 2922
+  Valid: 2741
+
+LVH:
+  Candidate: 2775
+  Valid: 2542
+
+NORMAL:
+  Candidate: 13974
+  Valid: 12906
+
+Signal compatibility:
+  12-lead: YES
+  500 Hz: YES
+  10 seconds: YES
+  5000 samples: YES
+  lead order identical: YES
+
+Patient-level splitting possible:
+  PARTIAL - YES for PTBXL, STEMI; NO for CHAPMAN
+           (CHAPMAN ships no patient identifier; each of its
+            records is treated as its own split group.)
+
+Recommended final targets:
+  STEMI: 1442
+  AF: 2741
+  LVH: 2542
+  NORMAL: 2800
+
+No balancing has been performed yet.
+
+Harmonized dataset: /home/lindtseyxvii/Codes/cardiosentry/dataset-combination-code/ecg_dataset_pipeline/data/harmonized/harmonized_ecg_metadata.csv
+Reports:            /home/lindtseyxvii/Codes/cardiosentry/dataset-combination-code/ecg_dataset_pipeline/reports

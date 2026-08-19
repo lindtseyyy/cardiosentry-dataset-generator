@@ -1,0 +1,10 @@
+# synthetic image corpus build products (image_pipeline/)
+build/
+# ecg-image-kit is a separate upstream checkout, not vendored here
+ecg-image-kit/
+__pycache__/
+*.pyc
+# versioned dataset releases (large, licence-gated, reproducible from the CSVs)
+data/releases/
+data/harmonized/signals/
+data/balanced/signals/

@@ -1,0 +1,122 @@
+
+##########################################################################
+CARDIOSENTRY -- STEP 1: DATASET INSPECTION
+##########################################################################
+Everything below was read from the actual files on disk.
+
+==========================================================================
+SOURCE: PTB-XL v1.0.3
+==========================================================================
+  root                     : /home/lindtseyxvii/Codes/cardiosentry/dataset-files/ptb-xl-dataset
+  records in metadata      : 21,799
+  unique ECG ids           : 21,799
+  unique patient ids       : 18,869  <- patient-level splitting POSSIBLE
+  SCP statements defined   : 71   used in data: 71
+  sampling frequency       : 500.0:19441|None:19
+  leads / samples          : 12:19441|None:19  /  5000:19441|None:19
+  lead ordering (n distinct=2): I|II|III|AVR|AVL|AVF|V1|V2|V3|V4|V5|V6
+  signal pairs present     : 19,416 / 21,799
+  !! MISSING SIGNAL FILES  : 2,383 records in the metadata have no .dat/.hea on disk.
+     This distribution is INCOMPLETE. Those records cannot be used.
+  !! 74 .dat files have no matching .hea (unusable).
+  top labels:
+      SR        16748  sinus rhythm
+      NORM       9514  normal ECG
+      ABQRS      3327  abnormal QRS
+      IMI        2676  inferior myocardial infarction
+      ASMI       2357  anteroseptal myocardial infarction
+      LVH        2132  left ventricular hypertrophy
+      NDT        1825  non-diagnostic T abnormalities
+      LAFB       1623  left anterior fascicular block
+      AFIB       1514  atrial fibrillation
+      ISC_       1272  non-specific ischemic
+      PVC        1143  ventricular premature complex
+      IRBBB      1118  incomplete right bundle branch block
+
+==========================================================================
+SOURCE: Chapman-Shaoxing / Ningbo 12-lead ECG database
+==========================================================================
+  root                     : /home/lindtseyxvii/Codes/cardiosentry/dataset-files/chapman-dataset
+  .hea headers             : 45,019
+  .mat signals             : 45,001
+  complete pairs           : 44,899
+  !! .hea without .mat     : 120  (header but NO signal -- unusable)
+  !! .mat without .hea     : 102  (signal but NO labels -- unusable)
+  malformed headers        : 1
+       JS01052.hea: unparsable n_samples in record line (got '500000/mV')
+  patient identifier       : NONE PRESENT
+     -> patient-level splitting is NOT possible within this source.
+  sampling frequency       : 500.0:45019
+  leads / samples          : 12:45019  /  5000:45018|None:1
+  SNOMED codes defined     : 55   used in data: 94
+  !! codes used but UNDEFINED in ConditionNames_SNOMED-CT.csv: 43
+     largest undefined codes:
+       55827005           5384 occurrences  <- no definition shipped
+       55930002           4216 occurrences  <- no definition shipped
+       10370003           1180 occurrences  <- no definition shipped
+       713427006          1094 occurrences  <- no definition shipped
+       427172004          1089 occurrences  <- no definition shipped
+       61721007            652 occurrences  <- no definition shipped
+  top labels:
+      426177001         16514  SB       Sinus Bradycardia
+      426783006          8102  SR       Sinus Rhythm
+      164890007          8036  AF       Atrial Flutter
+      427084000          7231  ST       Sinus Tachycardia
+      164934002          7024  TWC      T wave Change
+      55827005           5384  --       *** UNDEFINED ***
+      55930002           4216  --       *** UNDEFINED ***
+      59931005           2871  TWO      T wave opposite
+      427393009          2544  SA       Sinus Irregularity
+      164889003          1774  AFIB     Atrial Fibrillation
+      429622005          1664  STDD     ST drop down
+      39732003           1540  ALS      Axis left shift
+
+==========================================================================
+SOURCE: 2026 ACS/STEMI dataset
+==========================================================================
+  root                     : /home/lindtseyxvii/Codes/cardiosentry/dataset-files/STEMI-dataset
+  labelled records (train) : 17,960
+  unique record ids        : 17,960
+  unique patient ids       : 17,018  <- patient-level splitting POSSIBLE
+     (17,960 ECGs from 17,018 patients -> repeated recordings per patient exist)
+  diagnostic columns       : 22
+  sampling frequency       : 500.0:17960
+  leads / samples          : 12:17960  /  5000:17960
+  lead ordering            : I|II|III|aVR|aVL|aVF|V1|V2|V3|V4|V5|V6
+  records with signal      : 17,960 / 17,960
+  !! test.csv holds 1,995 rows with NO diagnostic columns.
+     They cannot be labelled and are EXCLUDED from the pipeline entirely.
+  positive counts per diagnostic column:
+      AMI            2679
+      OMI            1151
+      CTO             957
+      PCI            4541
+      NSTEMI         1235
+      STEMI          1442
+      UA             6213
+      LM                5
+      PLAD            284
+      MLAD            116
+      DLAD             12
+      DB               35
+      PLCX            134
+      MLCX             86
+      DLCX             69
+      OM               13
+      PRCA            208
+      MRCA            136
+      DRCA            125
+      VF_VT           869
+      Paced           338
+      Prior_PCI      1323
+
+##########################################################################
+NOTES CARRIED FORWARD TO EXTRACTION
+##########################################################################
+* No source other than the 2026 ACS/STEMI dataset contains any
+  ST-elevation-MI concept. STEMI therefore comes from ONE source only.
+* Chapman/Ningbo has no patient identifier -> patient-level splitting
+  can only be guaranteed within PTB-XL and the ACS/STEMI dataset.
+* Patient identifiers are NOT comparable across datasets: the three
+  cohorts are from different institutions and countries. Cross-dataset
+  patient overlap can be neither confirmed nor ruled out.
