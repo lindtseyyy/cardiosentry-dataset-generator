@@ -1,0 +1,59 @@
+# CardioSentry model descriptor — round-2 control run (768px).
+# A model = one .pt + this YAML. Swap models by adding two files and pointing
+# active.yaml at the new descriptor; zero application-code changes.
+schema_version: 1
+
+id: resnet50_hires
+display_name: "CardioSentry ResNet-50 @768 (hybrid_v1)"
+version: hybrid_v1
+notes: "Round-2 control run: resolution-only change vs resnet50_base. Best LVH
+        model of the round; the default serving model (plan Q1/Q2)."
+
+weights: weights/resnet50_hires.pt
+expected_sha256: 2dd129adc05f330adf42b2846283fdf0a8c5e4bc7f2408f9cfe581d707401cf2
+expected_protocol_fingerprint: 36988c5e0ba5d72d
+
+architecture:
+  module: arch.hybrids_v1          # vendored package (backend/arch/)
+  registry_key: resnet50_hires
+  pretrained: false                # weights are overwritten anyway
+  call_style: view_dict            # round-2 models take {768: tensor} (F3)
+  views: [768]
+
+labels: [STEMI, AF, LVH, NORMAL]   # order MUST match the checkpoint's head (F1)
+display_names:
+  STEMI: "ST-Elevation MI (STEMI)"
+  AF: "Atrial Fibrillation"
+  LVH: "Left Ventricular Hypertrophy"
+  NORMAL: "Normal"
+
+thresholds:
+  source: checkpoint               # frozen per-class thresholds tuned on the
+  explicit: null                   # synthetic val split: [0.44, 0.81, 0.47, 0.39]
+
+preprocess:
+  canvas: [1650, 1275]             # warp destination (pre-margin), 150 DPI sheet
+  margin_px: 18
+  input_size: 768
+  resample: pil_bicubic
+  match_training_jpeg: true        # in-memory q95 round-trip (prepare_dataset)
+  jpeg_quality: 95
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+runtime:
+  device: cpu
+  dtype: float32
+  num_threads: null           # null = settings.num_threads (env-overridable)
+
+explain:
+  enabled: true
+  target_layer: null               # auto: the last 4-D feature map (see explain.py)
+  # The printed ID/Age/Sex block, as (x0, y0, x1, y1) fractions. Nothing is
+  # painted over it — this is the region attribution maps are MEASURED against.
+  header_box: [0.10, 0.02, 0.30, 0.18]
+  # False: this round trained on unredacted sheets, so the header is in
+  # distribution for it. That makes header attribution less surprising and no
+  # less disqualifying — the record ID printed there separates STEMI exactly.
+  header_redacted_in_training: false

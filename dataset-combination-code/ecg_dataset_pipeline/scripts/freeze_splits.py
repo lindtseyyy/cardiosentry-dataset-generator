@@ -137,13 +137,21 @@ def main(argv=None):
     root = Path(paths["output"]["harmonized_dir"]).parent / "releases" / args.release
     hpath = root / "harmonized" / "harmonized_ecg_metadata.csv"
     bpath = root / "balanced" / "balanced_ecg_metadata.csv"
-    for p in (hpath, bpath):
-        if not p.exists():
-            warn(f"{p} not found")
-            return 1
+    if not hpath.exists():
+        warn(f"{hpath} not found")
+        return 1
 
+    # The balanced CSV is OPTIONAL. A release may deliberately ship harmonized
+    # only - v3 does, because balancing was explicitly not applied to it - and
+    # refusing to freeze a split for such a release makes it unusable
+    # downstream for no reason. When absent, the split is frozen into the
+    # harmonized CSV alone and every balanced-side check is skipped.
     H, hfields = _read(hpath)
-    B, bfields = _read(bpath)
+    if bpath.exists():
+        B, bfields = _read(bpath)
+    else:
+        info(f"no balanced CSV at {bpath} - freezing the harmonized split only")
+        B, bfields = [], None
 
     frozen = "split" in hfields and all(r.get("split") for r in H)
     if frozen and not args.reassign:
@@ -205,9 +213,10 @@ def main(argv=None):
     print()
     for line in _report(H, "harmonized"):
         print(line)
-    print()
-    for line in _report(B, "balanced"):
-        print(line)
+    if B:
+        print()
+        for line in _report(B, "balanced"):
+            print(line)
 
     if syn:
         print()
@@ -226,14 +235,17 @@ def main(argv=None):
         warn("integrity checks failed -- refusing to write")
         return 1
 
-    for path, rows, fields in ((hpath, H, hfields), (bpath, B, bfields)):
+    targets = [(hpath, H, hfields)]
+    if bfields is not None:
+        targets.append((bpath, B, bfields))
+    for path, rows, fields in targets:
         f = fields + ["split"] if "split" not in fields else fields
         write_csv(path, rows, f)
         info(f"froze split column into {path}")
 
     rdir = reports_dir(paths)
     srows = []
-    for name, rows in (("harmonized", H), ("balanced", B)):
+    for name, rows in ([("harmonized", H)] + ([("balanced", B)] if B else [])):
         for s in ("train", "val", "test"):
             sub = [r for r in rows if r["split"] == s]
             srows.append({

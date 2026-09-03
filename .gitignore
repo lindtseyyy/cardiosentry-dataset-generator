@@ -22,6 +22,18 @@ dataset-files/
 # --- Generated dataset artefacts (~57 GB, reproducible by running the pipeline) ---
 dataset-combination-code/ecg_dataset_pipeline/data/
 
+# --- Staged datasets: decoded waveforms + index (reproducible from
+#     dataset-files/ by re-running dataset-staging/*/scripts/) ---
+#     Scripts, configs, READMEs and the small reports ARE tracked.
+dataset-staging/cuhk/data/signals/
+dataset-staging/cuhk/data/index/
+dataset-staging/*/reports/conversion.log
+dataset-staging/*/reports/validate.log
+dataset-staging/*/reports/audit_signal_stats.csv
+
+# --- Standalone CUHK release (2.2 GB, rebuild with make_clean_release.py) ---
+dataset-files/cuhk_dataset_clean/
+
 # --- Upstream third-party checkout (631 MB, clone it separately) ---
 # https://github.com/alphanumericslab/ecg-image-kit
 dataset-combination-code/ecg_dataset_pipeline/ecg-image-kit/
@@ -49,3 +61,81 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+
+# ---------------------------------------------------------------------------
+# CardioSentry web application (cardiosentry-application/)
+#
+# captures/ is the hard requirement: photographs of real ECG sheets may carry
+# printed patient identifiers. Verify this BEFORE the first run — a committed
+# patient photograph is not retractable from git history (plan §19.4).
+# ---------------------------------------------------------------------------
+cardiosentry-application/captures/
+captures_export.csv
+cardiosentry-application/.env
+
+# Model weights are ~100-500 MB binaries, copied from prototype-results/
+# (see cardiosentry-application/models/README.md). The descriptors are code
+# and ARE committed.
+cardiosentry-application/models/weights/
+
+# Frontend build products
+cardiosentry-application/frontend/node_modules/
+cardiosentry-application/frontend/dist/
+
+# HTTPS certs (make_cert.sh)
+cardiosentry-application/certs/
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Results and experiment output — CODE AND NOTEBOOKS ONLY
+#
+# This repo ships the source that produces the work, not the work's output.
+# prototype-results/ is excluded outright. experiments/ keeps only its source
+# (.py / .ipynb / .sh / .md / config) — every rendered sheet, figure, metric
+# CSV, prediction dump and checkpoint under it stays out.
+# ---------------------------------------------------------------------------
+
+# --- Model checkpoints (~3.9 GB; 20 files exceed GitHub's 100 MB hard limit) ---
+*.pt
+*.pth
+*.ckpt
+
+# --- Training run output (~4.0 GB) ---
+# Metrics, figures, prediction CSVs and checkpoints from every prototype run.
+# The notebooks that produced them are tracked under prototype-code/.
+prototype-results/
+
+# --- Experiment output (~1.1 GB) ---
+# Ignore the whole tree, then re-admit source files only. The `**/` negation
+# is required: git will not descend into an excluded directory, so the
+# directories must be re-included before the files inside them can be.
+experiments/**
+!experiments/**/
+!experiments/**/*.py
+!experiments/**/*.ipynb
+!experiments/**/*.sh
+!experiments/**/*.md
+!experiments/**/*.toml
+!experiments/**/*.yaml
+!experiments/**/*.yml
+!experiments/**/*.cfg
+!experiments/**/README*.txt
+!experiments/**/.gitignore
+
+# Re-exclude things the negations above would otherwise drag back in.
+experiments/**/__pycache__/
+experiments/_colab_bundle/pkg/ecg-image-kit/
+
+# --- Bulky staged metadata (rebuild with dataset-staging/cuhk/scripts/) ---
+dataset-staging/cuhk/data/cuhk_metadata.csv
+dataset-staging/cuhk/reports/label_decisions.csv
+dataset-staging/cuhk/reports/excluded_records.csv
+dataset-staging/cuhk/reports/conversion_report.csv
+
+# --- Per-run pipeline logs (~45 MB of snapshots) ---
+dataset-combination-code/ecg_dataset_pipeline/logs/
+dataset-combination-code/ecg_dataset_pipeline/reports/v3_precheck.csv
+
+# --- Python packaging / test caches ---
+*.egg-info/
+.pytest_cache/

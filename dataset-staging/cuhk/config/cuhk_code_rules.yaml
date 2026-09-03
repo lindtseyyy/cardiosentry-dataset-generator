@@ -1,0 +1,235 @@
+# =====================================================================
+# CardioSentry -- CUHK STEMI XML: Philips statement-code CLASSIFICATION RULES
+# =====================================================================
+# The CUHK dataset carries no human diagnosis table. Its only per-record
+# labelling is the Philips DXL algorithm's own interpretation statements
+# (`<unparsedstatement code="..">` inside each Sierra ECG XML).
+#
+# There are 626 distinct statement codes. Rather than transcribe 626
+# hand decisions, the codes are classified by their OWN statement text,
+# using the ordered rule table below. The rules are declared here, not
+# buried in Python; `scripts/build_label_map.py` applies them and emits
+#   config/label_map_cuhk.yaml   (one explicit entry per code, pipeline schema)
+#   reports/code_decisions.csv   (every code, its bucket, status and text)
+# so that every one of the 626 decisions is reviewable in one table.
+#
+# ORDER MATTERS. The first rule whose `match` regex hits the code's
+# statement text wins. That is what lets "ST ELEVATION, PROBABLY DUE TO
+# LVH" be caught as a STEMI *mimic* before it can be caught as
+# ST-elevation, and "INFARCT, POSSIBLY ACUTE" be caught as ambiguous
+# before "INFARCT, ACUTE" can claim it.
+# =====================================================================
+
+version: 1
+criteria: "Philips DXL / TraceMasterVue, criteria versions 0A-0C as shipped in the XMLs"
+
+# Status vocabulary is IDENTICAL to the main pipeline's
+# config/label_mapping.yaml, so this block can be pasted into it verbatim:
+#   ACCEPT, EXCLUDE_UNCERTAIN, EXCLUDE_NOT_TARGET, EXCLUDE_RECORD,
+#   NORMAL_DISQUALIFIER, NORMAL_NEUTRAL
+
+buckets:
+
+  # -- 1. Interpretation is incomplete: the algorithm said so itself. ----
+  - name: NO_ANALYSIS
+    match: "no further analysis|no analysis attempted|incomplete analysis|not enough leads|defective data|could not be measured"
+    status: EXCLUDE_RECORD
+    maps_to: null
+    reason: >
+      The Philips algorithm explicitly reports that it did not complete the
+      interpretation for this recording. Every label on such a record is
+      therefore unreliable in BOTH directions -- a missing STEMI statement
+      does not mean "no STEMI". Keeping the record would assert a negative
+      the source never made.
+
+  # -- 2. Paced rhythms: ST analysis is not interpretable. --------------
+  - name: PACED
+    match: "pacemaker|paced|pacing|pacer|pace spike"
+    status: EXCLUDE_RECORD
+    maps_to: null
+    reason: >
+      Ventricular pacing produces secondary ST-T changes that mimic and mask
+      ST elevation (the reason Sgarbossa-type criteria exist). The algorithm
+      cannot assert or exclude STEMI on a paced complex, and neither can we.
+      Dropped rather than kept as STEMI=0.
+
+  # -- 3. ST elevation the algorithm attributes to a BENIGN cause. ------
+  - name: STE_BENIGN
+    match: "early repol|normal variant|probably normal|pericarditis"
+    status: EXCLUDE_NOT_TARGET
+    maps_to: null
+    disqualifies_normal: true
+    reason: >
+      ST elevation that the algorithm attributes to early repolarisation, a
+      normal variant, or pericarditis. These are the classic non-ischaemic
+      causes of ST elevation; the source is making a positive statement that
+      this elevation is NOT infarction, so STEMI=0 is the source's own
+      assertion, not a guess of ours.
+
+  # -- 4. ST elevation attributed to LVH / bundle branch block. ---------
+  - name: STE_MIMIC
+    match: "due to lvh|due to lbbb|due to rbbb|due to ivcd"
+    status: EXCLUDE_RECORD
+    maps_to: null
+    reason: >
+      ST elevation (or Q waves) that the algorithm attributes to LVH or to a
+      bundle branch block. Unlike early repolarisation this is NOT a benign
+      verdict: LVH strain and LBBB are STEMI *mimics* that also MASK a real
+      occlusion, and in an ACS-referral cohort a concomitant STEMI cannot be
+      excluded. Neither STEMI=1 nor STEMI=0 is defensible, so the record is
+      dropped.
+
+  # -- 5. Unambiguous acute ST-elevation injury / acute infarct. --------
+  - name: MI_ACUTE
+    match: "infarct, acute|acute infarct|early acute infarct|probable early acute|st elevation, probable .*injury|st elevation, consider .*injury|^injury|injury, "
+    status: ACCEPT
+    maps_to: STEMI
+    reason: >
+      The algorithm asserts acute myocardial INJURY or ACUTE infarction on
+      the basis of ST elevation (the Philips *INJ* and *acute infarct*
+      statement families, e.g. PINJI "ST ELEVATION, PROBABLE INFERIOR
+      INJURY", IMIA "INFARCT, ACUTE"). This is a direct ST-elevation
+      myocardial injury assertion -- the one thing the project accepts as
+      STEMI. Note the provenance: algorithmic, not cardiologist-adjudicated.
+
+  # -- 6. Acute ischaemia asserted only HEDGED. -------------------------
+  - name: MI_AMBIG
+    match: "possibly acute|possibly recent|infarct, recent|hyperacute|reciprocal st depression"
+    status: EXCLUDE_RECORD
+    maps_to: null
+    reason: >
+      "INFARCT, POSSIBLY ACUTE" / "INFARCT, RECENT" -- the algorithm sees
+      Q waves WITH ST elevation but will not commit to an acute event.
+      In a STEMI-registry cohort these are very often true STEMIs, so
+      STEMI=0 would be a wrong negative on a large group; but the source
+      never asserts STEMI, so STEMI=1 would be a guess. EXCLUDE_RECORD is
+      the project's declared answer to exactly this situation.
+
+  # -- 7. Bare ST elevation, no mechanism assigned. ---------------------
+  - name: STE_OTHER
+    match: "st elev|injury"
+    status: EXCLUDE_RECORD
+    maps_to: null
+    reason: >
+      A bare ST-elevation FORM statement (e.g. BSTEI "ST elevation, inferior
+      leads", MSTEA "minimal ST elevation, anterior leads") with no
+      ischaemic or benign attribution. The main pipeline already refuses to
+      map bare ST elevation to STEMI (PTB-XL `STE_`). Here the record is not
+      merely denied the STEMI label but dropped, because this cohort is an
+      ACS registry: an unattributed ST elevation is far likelier to be a
+      real occlusion here than in a general-population database, so
+      asserting STEMI=0 would poison the negative set.
+
+  # -- 8. Atrial fibrillation. ------------------------------------------
+  - name: AF
+    match: "atrial fibrillation|atrial fib\\.|atrial fib w|afib"
+    status: ACCEPT
+    maps_to: AF
+    reason: >
+      Explicit atrial fibrillation rhythm statement (AFIB family). Direct,
+      unhedged rhythm assertion by the algorithm.
+
+  # -- 9. Atrial flutter / flutter-fibrillation. ------------------------
+  - name: FLUTTER
+    match: "atrial flutter|a-flutter|flutter/fib|flutter or fib|flutter-fib"
+    status: EXCLUDE_UNCERTAIN
+    maps_to: null
+    disqualifies_normal: true
+    reason: >
+      Atrial flutter is not atrial fibrillation, and "flutter/fibrillation"
+      is undecided between them. Mirrors the main pipeline's AFLT decision
+      for PTB-XL, so the AF head means the same thing across all sources.
+
+  # -- 10. Left ventricular hypertrophy, asserted as a diagnosis. -------
+  - name: LVH
+    match: "left ventricular hypertrophy|lvh with|lvh w/"
+    status: ACCEPT
+    maps_to: LVH
+    reason: >
+      The algorithm names left ventricular hypertrophy as the finding --
+      either alone or with its secondary repolarisation / ST-T abnormality
+      (LVHREP, LVH31, LVHCO ...). Matches the main pipeline's PTB-XL `LVH`
+      decision.
+
+  # -- 11. LVH voltage criteria only. -----------------------------------
+  - name: LVH_VOLT
+    match: "lvh by voltage|lvh voltage|high qrs voltage|hi voltage|prominent anterior forces"
+    status: EXCLUDE_UNCERTAIN
+    maps_to: null
+    disqualifies_normal: true
+    reason: >
+      Voltage criteria alone ("LVH by voltage", "high QRS voltage") are a
+      measurement, not a diagnosis of hypertrophy. The main pipeline already
+      excludes PTB-XL's voltage-criteria LVH (`VCLVH`) for this reason; the
+      same line is held here.
+
+  # -- 12. Right ventricular hypertrophy. -------------------------------
+  - name: RVH
+    match: "right ventricular hypertrophy|rvh"
+    status: EXCLUDE_NOT_TARGET
+    maps_to: null
+    disqualifies_normal: true
+    reason: "A different chamber. Not LVH. Mirrors the main pipeline's RVH decision."
+
+  # -- 13. Old infarct / infarct of indeterminate age. ------------------
+  - name: MI_OLD
+    match: "infarct, old|age indeterminate|age indeterm"
+    status: EXCLUDE_UNCERTAIN
+    maps_to: null
+    disqualifies_normal: true
+    reason: >
+      Q-wave infarct of old or indeterminate age, with no acute ST-elevation
+      assertion. Not STEMI: the acute occlusion is over. Kept in the cohort
+      as a legitimate STEMI=0 (this is the source's own reading), matching
+      how the main pipeline treats PTB-XL's location-only MI codes.
+
+  # -- 14. Other infarct / Q-wave statements. ---------------------------
+  - name: MI_OTHER
+    match: "infarct|q wave|q's|\\bmi\\b|r wave progression|r-wave progression|wall involvement"
+    status: EXCLUDE_UNCERTAIN
+    maps_to: null
+    disqualifies_normal: true
+    reason: >
+      An infarct-related morphology statement (Q waves, poor R-wave
+      progression, wall involvement) with no ST-elevation and no acute
+      qualifier. Location/morphology only -- not mappable to STEMI, exactly
+      as the main pipeline rules for PTB-XL's IMI/AMI/ALMI family.
+
+  # -- 15. Technical / signal-quality statements. -----------------------
+  - name: QUALITY
+    match: "artifact|baseline wander|ac noise|missing lead|were not used for morphology|lead reversal|electrode"
+    status: NORMAL_NEUTRAL
+    maps_to: null
+    reason: >
+      A recording-quality remark, not a diagnosis. Carried through to the
+      metadata as a quality flag; it neither creates nor blocks a label.
+
+  # -- 16. Sinus rhythm family. -----------------------------------------
+  - name: SINUS
+    match: "sinus rhythm|normal sinus"
+    status: NORMAL_NEUTRAL
+    maps_to: null
+    reason: >
+      Sinus rhythm -- the expected baseline. Neutral. Note this source has
+      `normal_assertion: null`, so no CUHK record can ever become NORMAL.
+
+  # -- 17. Age-not-entered notice. --------------------------------------
+  - name: AGE_NOTICE
+    match: "age is not entered|age not entered"
+    status: NORMAL_NEUTRAL
+    maps_to: null
+    reason: >
+      Administrative notice that patient age was absent, so the algorithm
+      assumed a default age. Captured separately as `age_default_used`.
+
+  # -- 18. Everything else: a real finding, just not one of ours. -------
+  - name: OTHER
+    match: ".*"
+    status: EXCLUDE_NOT_TARGET
+    maps_to: null
+    disqualifies_normal: true
+    reason: >
+      An understood ECG finding that is not one of the four CardioSentry
+      classes (conduction blocks, axis deviation, atrial abnormality,
+      ectopy, ST depression, T-wave and ischaemia statements, ...). Not an
+      error: simply outside the target set.

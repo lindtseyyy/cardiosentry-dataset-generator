@@ -1,0 +1,159 @@
+# =====================================================================
+# CardioSentry -- Lobachevsky University Database (LUDB): LABEL MAPPING
+# =====================================================================
+# Schema is identical to the main pipeline's config/label_mapping.yaml, so
+# this `ludb:` block can be pasted under that file's `sources:` key unchanged.
+#
+# LUDB ships 200 records, each with a cardiologist-written diagnosis list in
+# the WFDB header comments (`#<diagnoses>:`). The vocabulary is CLOSED: 82
+# distinct diagnosis lines across the whole database, every one of which is
+# declared below. `unknown_code_policy` therefore only fires if a future
+# release of LUDB adds a term.
+#
+# PROVENANCE: human. "Manual annotation of ECG signal complexes and
+# diagnostics were performed by doctors of medical organizations in Nizhny
+# Novgorod" (LUDB README). This is the same class of evidence as PTB-XL's
+# human overread, and stronger than the CUHK source's algorithmic labels.
+# =====================================================================
+
+version: 1
+
+sources:
+  ludb:
+    name: "Lobachevsky University Database (LUDB) v1.0.1"
+    label_type: header_comment_diagnoses
+    label_source: "#<diagnoses>: lines in each data/<id>.hea"
+
+    # LUDB annotators filled in a fixed checklist of abnormality categories
+    # for every record. A record with no entry in ANY pathology category is a
+    # positive statement by the annotator that none were found -- not merely
+    # missing data. The reader emits the synthetic token below for exactly
+    # those records; it is the source's normal assertion.
+    normal_assertion: "LUDB_NO_PATHOLOGICAL_FINDING"
+    contributes_classes: [STEMI, AF, LVH, NORMAL]
+
+    unknown_code_policy:
+      status: EXCLUDE_UNKNOWN_CODE
+      disqualifies_normal: true
+
+    labels:
+
+      LUDB_NO_PATHOLOGICAL_FINDING:
+        maps_to: NORMAL
+        status: ACCEPT
+        disqualifies_normal: false
+        reason: >
+          Synthetic token emitted by the reader when a record carries a rhythm
+          statement and an electrical-axis statement but NO entry in any of
+          the pathology categories (conduction, extrasystole, hypertrophy,
+          pacing, ischaemia, repolarisation, other). LUDB's annotation is a
+          completed checklist, so an empty pathology section is an assertion,
+          not an absence of data.
+
+      # ---- STEMI: the only direct ST-elevation assertion in LUDB --------
+      # A cardiologist has written "STEMI" against a named wall.
+      "STEMI: anterior wall":  {maps_to: STEMI, status: ACCEPT, reason: "Cardiologist-assigned ST-elevation myocardial infarction, anterior wall."}
+      "STEMI: septal":         {maps_to: STEMI, status: ACCEPT, reason: "Cardiologist-assigned STEMI, septal."}
+      "STEMI: lateral wall":   {maps_to: STEMI, status: ACCEPT, reason: "Cardiologist-assigned STEMI, lateral wall."}
+      "STEMI: apical":         {maps_to: STEMI, status: ACCEPT, reason: "Cardiologist-assigned STEMI, apical."}
+      "STEMI: inferior wall":  {maps_to: STEMI, status: ACCEPT, reason: "Cardiologist-assigned STEMI, inferior wall."}
+
+      # ---- ischaemia / scar: real findings, but NOT ST-elevation MI -----
+      "Ischemia: inferior wall":  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Ischaemia without an ST-elevation assertion. Not STEMI; the project never infers STEMI from ischaemia."}
+      "Ischemia: lateral wall":   {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Ischaemia without an ST-elevation assertion. Not STEMI."}
+      "Ischemia: anterior wall":  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Ischaemia without an ST-elevation assertion. Not STEMI."}
+      "Ischemia: apical":         {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Ischaemia without an ST-elevation assertion. Not STEMI."}
+      "Ischemia: septal":         {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Ischaemia without an ST-elevation assertion. Not STEMI."}
+      "Ischemia: posterior wall": {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Ischaemia without an ST-elevation assertion. Not STEMI."}
+
+      "Undefined ischemia/scar/supp.NSTEMI: lateral wall":   {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "The annotator explicitly could not distinguish ischaemia, old scar and suspected NSTEMI. Undecidable by construction; NSTEMI is by definition not STEMI."}
+      "Undefined ischemia/scar/supp.NSTEMI: anterior wall":  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Explicitly undefined between ischaemia, scar and suspected NSTEMI."}
+      "Undefined ischemia/scar/supp.NSTEMI: apical":         {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Explicitly undefined between ischaemia, scar and suspected NSTEMI."}
+      "Undefined ischemia/scar/supp.NSTEMI: septal":         {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Explicitly undefined between ischaemia, scar and suspected NSTEMI."}
+      "Undefined ischemia/scar/supp.NSTEMI: posterior wall": {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Explicitly undefined between ischaemia, scar and suspected NSTEMI."}
+      "Undefined ischemia/scar/supp.NSTEMI: inferior wall":  {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Explicitly undefined between ischaemia, scar and suspected NSTEMI."}
+
+      "Scar formation: septal":         {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Established myocardial scar -- a healed infarct, not an acute ST-elevation event."}
+      "Scar formation: anterior wall":  {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Established myocardial scar, not an acute event."}
+      "Scar formation: posterior wall": {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Established myocardial scar, not an acute event."}
+      "Scar formation: apical":         {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Established myocardial scar, not an acute event."}
+      "Scar formation: lateral wall":   {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Established myocardial scar, not an acute event."}
+      "Scar formation: inferior wall":  {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Established myocardial scar, not an acute event."}
+
+      # ---- AF -----------------------------------------------------------
+      "Rhythm: Atrial fibrillation":    {maps_to: AF, status: ACCEPT, reason: "Explicit atrial fibrillation rhythm diagnosis."}
+      "Rhythm: Atrial flutter, typical": {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Atrial flutter is not atrial fibrillation. Mirrors the AFLT decision made for PTB-XL and for the CUHK source, so the AF head means the same thing everywhere."}
+
+      # ---- LVH ----------------------------------------------------------
+      "Left ventricular hypertrophy": {maps_to: LVH, status: ACCEPT, reason: "Explicit left ventricular hypertrophy diagnosis. Matches the main pipeline's PTB-XL LVH decision."}
+      "Left ventricular overload":    {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "Ventricular 'overload' (strain pattern) is a repolarisation finding, not an assertion of hypertrophy. Not mapped to LVH."}
+      "Left atrial hypertrophy":      {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial, not ventricular. Mirrors the main pipeline's LAO/LAE decision."}
+      "Left atrial overload":         {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial, not ventricular."}
+      "Right atrial overload":        {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial, not ventricular."}
+      "Right atrial hypertrophy":     {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial, not ventricular."}
+      "Right ventricular hypertrophy": {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "A different chamber. Not LVH. Mirrors the main pipeline's RVH decision."}
+
+      # ---- rhythm statements that are not targets ------------------------
+      "Rhythm: Sinus rhythm":          {maps_to: null, status: NORMAL_NEUTRAL, reason: "The expected baseline rhythm. Neutral: does not by itself make a record NORMAL, and does not disqualify it."}
+      "Rhythm: Sinus bradycardia":     {maps_to: null, status: NORMAL_NEUTRAL, reason: "Rate variant of sinus rhythm. Treated as neutral, matching how the main pipeline lets PTB-XL NORM+SBRAD records be NORMAL."}
+      "Rhythm: Sinus tachycardia":     {maps_to: null, status: NORMAL_NEUTRAL, reason: "Rate variant of sinus rhythm. Neutral."}
+      "Rhythm: Sinus arrhythmia":      {maps_to: null, status: NORMAL_NEUTRAL, reason: "Respiratory sinus arrhythmia -- a physiological variant. Neutral."}
+      "Rhythm: Irregular sinus rhythm": {maps_to: null, status: EXCLUDE_UNCERTAIN, also: NORMAL_DISQUALIFIER, reason: "An irregular rhythm that the annotator did not resolve. Excluded from AF by the same rule that excludes 'supraventricular arrhythmia, unspecified' in the main pipeline."}
+      "Wandering atrial pacemaker":    {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Shifting atrial focus. Not AF, not a target class."}
+      "Sinoatrial blockade, undefined": {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Sinoatrial exit block. Not a target class."}
+      "Aberrant conduction":           {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Aberrantly conducted complexes. Not a target class."}
+
+      # ---- electrical axis ------------------------------------------------
+      "Electric axis of the heart: normal":     {maps_to: null, status: NORMAL_NEUTRAL, reason: "Normal frontal axis. Neutral."}
+      "Electric axis of the heart: vertical":   {maps_to: null, status: NORMAL_NEUTRAL, reason: "Vertical axis -- a normal constitutional variant. Neutral."}
+      "Electric axis of the heart: horizontal": {maps_to: null, status: NORMAL_NEUTRAL, reason: "Horizontal axis -- a normal constitutional variant. Neutral."}
+      "Electric axis of the heart: left axis deviation":  {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Left axis deviation is a reported abnormality; it blocks NORMAL but is not a target class."}
+      "Electric axis of the heart: right axis deviation": {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Right axis deviation is a reported abnormality; it blocks NORMAL but is not a target class."}
+
+      # ---- conduction ------------------------------------------------------
+      "Incomplete right bundle branch block":          {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Conduction abnormality. Not a target class."}
+      "Complete right bundle branch block":            {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Conduction abnormality. Not a target class."}
+      "Incomplete left bundle branch block":           {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Conduction abnormality. Not a target class."}
+      "Complete left bundle branch block":             {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Conduction abnormality. Not a target class. (LBBB also masks ST elevation; LUDB records it separately from any ischaemia finding, so no STEMI inference is made either way.)"}
+      "Left anterior hemiblock":                       {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Fascicular block. Not a target class."}
+      "I degree AV block":                             {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "AV conduction delay. Not a target class."}
+      "III degree AV-block":                           {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Complete heart block. Not a target class."}
+      "Non-specific intravintricular conduction delay": {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "IVCD (LUDB's own spelling). Not a target class."}
+
+      # ---- repolarisation ---------------------------------------------------
+      "Non-specific repolarization abnormalities: inferior wall":  {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Non-specific repolarisation change -- explicitly non-specific, so no ischaemic inference. Not a target class."}
+      "Non-specific repolarization abnormalities: anterior wall":  {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Non-specific repolarisation change. Not a target class."}
+      "Non-specific repolarization abnormalities: septal":         {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Non-specific repolarisation change. Not a target class."}
+      "Non-specific repolarization abnormalities: lateral wall":   {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Non-specific repolarisation change. Not a target class."}
+      "Non-specific repolarization abnormalities: apical":         {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Non-specific repolarisation change. Not a target class."}
+      "Non-specific repolarization abnormalities: posterior wall": {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Non-specific repolarisation change. Not a target class."}
+      "Early repolarization syndrome":                             {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Benign early repolarisation -- the classic non-ischaemic cause of ST elevation. Explicitly NOT STEMI, and it blocks NORMAL because it is a named finding."}
+
+      # ---- ectopy -----------------------------------------------------------
+      "Ventricular extrasystole, type: single PVC":                     {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Ventricular ectopy. Not a target class."}
+      "Ventricular extrasystole, type: intercalary PVC":                {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Ventricular ectopy. Not a target class."}
+      "Ventricular extrasystole, type: couplet":                        {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Ventricular ectopy. Not a target class."}
+      "Ventricular extrasystole, morphology: polymorphic":              {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Ventricular ectopy descriptor. Not a target class."}
+      "Ventricular extrasystole, localisation: RVOT, anterior wall":    {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Ventricular ectopy localisation. Not a target class."}
+      "Ventricular extrasystole, localisation: RVOT, antero-septal part": {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Ventricular ectopy localisation. Not a target class."}
+      "Ventricular extrasystole, localisation: LVOT, LVS":              {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Ventricular ectopy localisation. Not a target class."}
+      "Ventricular extrasystole, localisation: IVS, middle part":       {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Ventricular ectopy localisation. Not a target class."}
+      "Ventricular extrasystole, localisation: LV, undefined":          {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Ventricular ectopy localisation. Not a target class."}
+      "Atrial extrasystole, type: single PAC":                          {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial ectopy. Not AF, not a target class."}
+      "Atrial extrasystole, type: quadrigemini":                        {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial ectopy. Not AF, not a target class."}
+      "Atrial extrasystole, type: bigemini":                            {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial ectopy. Not AF, not a target class."}
+      "Atrial extrasystole, type: allorhythmic pattern":                {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial ectopy. Not AF, not a target class."}
+      "Atrial extrasystole: SA-nodal extrasystole":                     {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial ectopy. Not AF, not a target class."}
+      "Atrial extrasystole: left atrial":                               {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial ectopy. Not AF, not a target class."}
+      "Atrial extrasystole: low atrial":                                {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial ectopy. Not AF, not a target class."}
+      "Atrial extrasystole: undefined":                                 {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial ectopy. Not AF, not a target class."}
+
+      # ---- pacing: the ST segment is not interpretable ----------------------
+      # Same decision as the CUHK source: a paced ventricle produces secondary
+      # ST-T change that both mimics and masks ST elevation, so neither STEMI=1
+      # nor STEMI=0 can be asserted and the whole record is dropped.
+      "UNIpolar ventricular pacing": {maps_to: null, status: EXCLUDE_RECORD, reason: "Ventricular pacing makes the ST segment uninterpretable for ST-elevation. Record dropped rather than kept as a STEMI negative."}
+      "BIpolar ventricular pacing":  {maps_to: null, status: EXCLUDE_RECORD, reason: "Ventricular pacing makes the ST segment uninterpretable for ST-elevation."}
+      "Biventricular pacing":        {maps_to: null, status: EXCLUDE_RECORD, reason: "Ventricular pacing makes the ST segment uninterpretable for ST-elevation."}
+      "UNIpolar atrial pacing":      {maps_to: null, status: EXCLUDE_NOT_TARGET, also: NORMAL_DISQUALIFIER, reason: "Atrial pacing leaves ventricular depolarisation and the ST segment intact. Blocks NORMAL, but does not invalidate the record."}
+      "P-synchrony":                 {maps_to: null, status: EXCLUDE_RECORD, reason: "Atrial-sensed ventricular pacing: the ventricle is paced, so the ST segment is uninterpretable."}

@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import os
 import shutil
 import sys
 from collections import Counter
@@ -90,12 +91,21 @@ def _transcode(row: dict, out_name: str, out_dir, sos) -> str | None:
     # Keep well inside int16 at 1000 ADU/mV; real ECGs never reach +-32 mV.
     sig = np.clip(sig, -32.0, 32.0)
 
-    # Both comments are mandatory: the kit's --print_header does a bare
-    # dict lookup for 'Age' and 'Sex' and raises KeyError if either is absent.
-    # Stage 1 already drops records without them; this is the backstop.
-    if not row.get("age") or row.get("sex") not in C.SEX_WORD:
+    # Age/Sex are mandatory ONLY when the header is printed: the kit's
+    # --print_header does a bare dict lookup for both and raises KeyError if
+    # either is absent. With PRINT_HEADER off nothing reads them.
+    #
+    # This guard has to agree with the one in stage 1. It did not: stage 1 was
+    # relaxed for the header-off build and this backstop was left requiring
+    # both, so every age-less record survived stage 1 and was then silently
+    # dropped here - which would have thrown away 98.5% of CUHK, the only
+    # source of STEMI co-morbidity, while the log showed nothing but an
+    # aggregate `missing_metadata` count.
+    have_meta = bool(row.get("age")) and row.get("sex") in C.SEX_WORD
+    if C.PRINT_HEADER and not have_meta:
         return "missing_metadata"
-    comments = [f"Age: {row['age']}", f"Sex: {C.SEX_WORD[row['sex']]}"]
+    comments = ([f"Age: {row['age']}", f"Sex: {C.SEX_WORD[row['sex']]}"]
+                if have_meta else [])
 
     out_dir.mkdir(parents=True, exist_ok=True)
     wfdb.wrsamp(
@@ -117,6 +127,13 @@ STAGED_FIELDS = ([
     "record", "record_id", "original_id", "cls", "chunk", "source",
 ] + C.LABEL_COLUMNS + [
     "patient_id", "split", "n_renders", "age", "sex", "note",
+    # The band this record was filtered with, carried per row. Redundant across
+    # a build by construction, and that is the point: the filter is the one
+    # setting that changes the signal invisibly - two corpora built at 40 Hz and
+    # 150 Hz render to sheets that look identical, and the only other way to
+    # tell them apart is to re-filter the source and diff. Recording it here
+    # makes a mis-set ECG_LOWPASS_HZ auditable from the artefact.
+    "bandpass_hz",
 ])
 
 
@@ -144,7 +161,13 @@ def main() -> int:
     # which keeps a resumed build cheap. Anything else -> clear and restage,
     # because leftovers from a DIFFERENT manifest are what made stage 3 render
     # thousands of records it was never asked for.
-    fingerprint = hashlib.sha256(C.MANIFEST.read_bytes()).hexdigest()
+    # The stamp must cover the BAND as well as the manifest. staged/ is a pure
+    # function of (manifest, band); fingerprinting the manifest alone meant that
+    # re-running with a different ECG_LOWPASS_HZ found a matching stamp, skipped
+    # stage 2 entirely, and rendered the previous band's signals under the new
+    # build's name - the exact silent failure the printout above guards against.
+    _key = C.MANIFEST.read_bytes() + f"|band={C.BANDPASS}".encode()
+    fingerprint = hashlib.sha256(_key).hexdigest()
     stamp = C.STAGED / ".manifest.sha256"
     if not args.limit and not args.force_restage and stamp.exists():
         try:
@@ -163,6 +186,26 @@ def main() -> int:
                   f"({C.STAGED})")
             shutil.rmtree(C.STAGED, ignore_errors=True)
 
+    lo, hi = C.BANDPASS
+    src = "ECG_LOWPASS_HZ" if "ECG_LOWPASS_HZ" in os.environ else "config default"
+    print(f"band-pass: {lo:g}-{hi:g} Hz, zero-phase 2nd-order Butterworth "
+          f"({hi:g} Hz from {src})")
+    # Warn on a band the SHEET cannot carry, not on the default. At C.DPI and
+    # 25 mm/s the paper holds DPI/25.4*25 px/s, so image Nyquist is half that -
+    # 73.8 Hz at 150 DPI. Anything above it cannot be represented and only
+    # aliases against the 1 mm grid.
+    nyq_img = (C.DPI / 25.4 * 25) / 2.0
+    if hi > nyq_img:
+        print(f"  WARNING: {hi:g} Hz exceeds the image Nyquist of {nyq_img:.1f} Hz "
+              f"at {C.DPI} DPI / 25 mm/s.\n"
+              f"  Content above {nyq_img:.1f} Hz cannot appear on the sheet and will "
+              f"alias against the 1 mm grid.\n"
+              f"  On this corpus a wide band also renders mains hum that is "
+              f"concentrated in CUHK (26% of its\n"
+              f"  records carry >5% power at 45-65 Hz, vs 0.4% for PTB-XL), and CUHK "
+              f"is the only source of\n"
+              f"  STEMI co-morbidity - so the artefact correlates with the label. "
+              f"Deliberate variant builds only.")
     sos = _bandpass_sos(C.FS)
     stats = Counter()
     mapping = []
@@ -183,7 +226,8 @@ def main() -> int:
             continue
 
         stats[f"ok_{cls}"] += 1
-        entry = {"record": out_name, "chunk": f"c{chunk:03d}"}
+        entry = {"record": out_name, "chunk": f"c{chunk:03d}",
+                 "bandpass_hz": f"{C.BANDPASS[0]:g}-{C.BANDPASS[1]:g}"}
         entry.update({k: row.get(k, "") for k in STAGED_FIELDS if k in row})
         mapping.append({k: entry.get(k, "") for k in STAGED_FIELDS})
 

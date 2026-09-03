@@ -1,0 +1,14 @@
+LUDB -- staged cohort summary
+============================================================
+records in RECORDS               : 200
+  dropped, EXCLUDE_RECORD label  : 10
+  dropped, no target label       : 53
+  CANDIDATES (>=1 target label)  : 137
+
+candidates by class (multi-label)
+  STEMI   8
+  AF      12
+  LVH     106
+  NORMAL  25
+
+every diagnosis term in the database is declared in config/label_map_ludb.yaml.

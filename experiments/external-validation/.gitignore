@@ -1,0 +1,23 @@
+# Built artefacts. Everything here is reproducible from build/ plus the
+# datasets under dataset-files/, and the image corpus is ~300 MB.
+data/image_build/
+data/external_testset/
+data/external_testset.tar
+data/external_testset.tar.sha256
+data/render_log.txt
+data/external_test_metadata*.csv
+data/excluded_records.csv
+
+# Simulated output from eval/selftest.py - fabricated numbers, never commit
+# them next to real ones.
+results/_selftest/
+
+# evaluate_run.py --limit output. Real inference, but on a truncated corpus, so
+# the numbers are not results and must not sit beside ones that are.
+results/**/_smoke/
+
+__pycache__/
+*.pyc
+
+# CUHK scan outputs
+cuhk/*.csv

@@ -99,7 +99,23 @@ N_SAMPLES = 5000         # 10 s
 LEAD_ORDER = ["I", "II", "III", "aVR", "aVL", "aVF",
               "V1", "V2", "V3", "V4", "V5", "V6"]
 ADC_GAIN = 1000.0        # ADU per mV
-BANDPASS = (0.05, 40.0)  # Hz - see README for why the low-pass is 40, not 150
+# Hz. 0.05-40 Hz, the MONITORING band, is the default - and it is paired with
+# the 150 DPI render, not chosen independently. At 150 DPI and 25 mm/s the paper
+# carries 147.6 px/s, so the image's own Nyquist is 73.8 Hz: content above ~74 Hz
+# cannot be represented on the sheet at all and only aliases against the 1 mm
+# grid. 40 Hz leaves a 1.8x margin under that ceiling.
+#
+# Measured on this corpus, the wider 0.05-150 Hz band is actively harmful:
+# 26% of CUHK records carry >5% of their power at 45-65 Hz (mains hum) against
+# 1.2% for Chapman and 0.4% for PTB-XL, so the wide band renders a visible fuzz
+# that is CONCENTRATED IN ONE SOURCE. CUHK is also the only source of STEMI
+# co-morbidity, so that fuzz correlates with label - exactly the source/class
+# confound the identical-filter rule in stage 2 exists to prevent.
+#
+# ECG_LOWPASS_HZ still overrides it, for controlled filter-variant releases.
+# Anything above ~74 Hz aliases; a variant release must say so in its README.
+# Stage 2 prints the band it used and records it in staged_map.csv.
+BANDPASS = (0.05, float(os.environ.get("ECG_LOWPASS_HZ", "40.0")))
 
 # ---------------------------------------------------------------- corpus
 # How many render variants each record contributes. The input CSV is already
@@ -147,7 +163,12 @@ RECORD_NAME_FMT = "ECG{:06d}"
 # 150 DPI -> 5.91 px/mm -> 147.6 px/s at 25 mm/s -> image Nyquist 73.8 Hz, a
 # 1.8x margin over the 40 Hz signal band, and the kit's own recommended floor
 # for digitisation. Measured 739 KB/image vs 1.2 MB at 200 DPI.
-DPI = 150
+# ECG_DPI overrides it so a photo-realistic build can render the *print* at a
+# higher resolution and let the camera model downsample, which is what a real
+# lens does and what stops the trace looking like a vector graphic. Leave unset
+# for the released v2 corpus.
+DPI = int(os.environ.get("ECG_DPI", 150))
+PX_PER_MM = DPI / 25.4          # 150 dpi -> 5.91, 300 dpi -> 11.81
 # The kit fixes 25 mm/s and 10 mm/mV and prints them on the sheet; these are
 # recorded here for the DPI/Nyquist arithmetic above, not to configure it.
 PAPER_SPEED = 25         # mm/s
@@ -240,24 +261,62 @@ CREASE_CLIP = (0.88, 1.14)
 # flattening any individual effect.
 PAPER_LEVEL_TARGET = (216, 248)   # 95th-percentile luminance of the finished sheet
 
+# Write the annotation sidecars (lead bounding boxes, lead-name boxes, and the
+# traced pixel path of every waveform)?
+#
+# ON by default. They are what a segmentation or digitisation model would train
+# on. For plain 4-class classification they are dead weight - see the timing
+# note in experiments/final_render_v1/README.md for what they cost.
+ANNOTATIONS = os.environ.get("ECG_ANNOTATIONS", "1") not in ("0", "", "false", "False")
+
 # Flags passed to gen_ecg_images_from_data_batch.py. The kit's own distortion
 # layer (--augment / --wrinkles) is deliberately NOT used; see stage4.
-KIT_RENDER_FLAGS = [
-    "--num_columns", "4",        # 3x4 layout
+# Print the ID / Name / Date / Age / Sex block at the top of the sheet?
+#
+# OFF by default. The block carries nothing clinical - the ID is our own
+# synthetic ECGnnnnnn, and Name/Date are always blank - so it is chrome the
+# model has to learn to ignore. Turning it off also removes a real constraint:
+# the kit's --print_header does a bare dict lookup for 'Age' and 'Sex' and
+# raises KeyError if either is missing, which is why stage 1 drops any record
+# without both. With the header off that requirement disappears, and the CUHK
+# cohort - 98.5% of which has no recorded age - becomes usable, taking the
+# corpus from 19,350 records to 37,225 and the STEMI+AF+LVH class from 0 to 43.
+#
+# Set ECG_PRINT_HEADER=1 to restore it (v2 behaviour).
+PRINT_HEADER = os.environ.get("ECG_PRINT_HEADER", "0") not in ("0", "", "false", "False")
+
+# Vertical layout, in plot units (1.0 = 1 mV = 10 mm at 10 mm/mV).
+#
+# ROW_GAP is the spacing between the three twelve-lead rows; RHYTHM_GAP is the
+# separate, larger gap between the lowest lead row and the lead II rhythm
+# strip. They are independent because the kit used one row_height for every
+# gap, so tightening the lead rows used to drag the rhythm strip up with them.
+#
+# Whatever is not consumed by these gaps is left blank at the TOP of the sheet,
+# which is the cheap place to put slack: nothing is printed there once
+# PRINT_HEADER is off.
+#
+# Note the trade-off. A 12-lead row is 44 mm apart at the default, and a large
+# precordial QRS (V2/V3 routinely reach 4 mV = 40 mm at 10 mm/mV) will cross
+# into its neighbour. That is normal on real printouts and is NOT a reason to
+# rescale the signal - the gain must stay 10 mm/mV.
+ROW_GAP = float(os.environ.get("ECG_ROW_GAP", 4.4))
+RHYTHM_GAP = float(os.environ.get("ECG_RHYTHM_GAP", 5.5))
+BOTTOM_RESERVE = float(os.environ.get("ECG_BOTTOM_RESERVE", 1.9))
+
+KIT_RENDER_FLAGS = ([
+    "--num_columns", "4",        # 3x4 layout, the clinical standard
     "--full_mode", "II",         # continuous lead II rhythm strip
     "-r", str(DPI),
     "--pad_inches", "0",         # int-only in the kit; margin added in stage 4
-    "--print_header",            # ID / age / sex from header comments
     "--calibration_pulse", "1",
     # Grey grid, matching a real BTL CardioPoint printout: major (0.4,0.4,0.4),
     # minor (0.75,0.75,0.75), black trace. In the kit this palette is only
     # reachable through its "bw" style, which --random_bw 1 selects for every
     # image. It is a grid-colour switch here, not a greyscale conversion.
     "--random_bw", "1",
-    "--store_config", "1",
-    "--lead_bbox",
-    "--lead_name_bbox",
-]
+] + (["--store_config", "1", "--lead_bbox", "--lead_name_bbox"] if ANNOTATIONS else [])
+  + (["--print_header"] if PRINT_HEADER else []))
 
 
 # ---------------------------------------------------------------- helpers

@@ -1,0 +1,11 @@
+{
+  "model": "efficientnetv2_s_cbam_nat768",
+  "image": "ECG000002_a0.jpg",
+  "source": "test_predictions.csv (prototype GPU+AMP)",
+  "scores": {
+    "STEMI": 0.0013511209,
+    "AF": 0.99879813,
+    "LVH": 0.005957154,
+    "NORMAL": 0.0035518846
+  }
+}

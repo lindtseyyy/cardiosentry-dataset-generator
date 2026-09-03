@@ -1,0 +1,12 @@
+# Colab already ships torch, torchvision, numpy, pandas, pillow and scikit-learn.
+# In practice only timm needs installing:
+#     pip install -q timm
+#
+# Pinned floors for a clean environment:
+torch>=2.1
+torchvision>=0.16
+timm>=1.0.9
+numpy>=1.24
+pandas>=2.0
+pillow>=9.5
+scikit-learn>=1.3

@@ -228,9 +228,12 @@ def build(rows_in: list[dict], renders_override: int | None,
 
         age = clean_age(row.get(COL["age"]))
         sex = clean_sex(row.get(COL["sex"]), source)
-        if not age or not sex:
-            # Not cosmetic: the kit's --print_header does a bare dict lookup
-            # for 'Age' and 'Sex' and raises KeyError if either is absent.
+        if C.PRINT_HEADER and (not age or not sex):
+            # Only a hard requirement when the header is PRINTED: the kit's
+            # --print_header does a bare dict lookup for 'Age' and 'Sex' and
+            # raises KeyError if either is absent. With the header off nothing
+            # reads them, and dropping the record would discard 98.5% of CUHK
+            # (which records no age) for a caption that is not being drawn.
             stats["skip_missing_metadata"] += 1
             continue
 

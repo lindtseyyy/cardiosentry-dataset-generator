@@ -96,13 +96,34 @@ def check_balance(rows: list[dict]) -> bool:
 
 
 # ------------------------------------------------------------------ 3. geometry
-def check_images(rows: list[dict], n: int = 200) -> bool:
-    """Sanity-check pixel statistics; catches gain and rendering blow-ups."""
-    print(f"\n[3] image statistics (sample of {n})")
+def check_images(rows: list[dict], per_source: int = 150) -> bool:
+    """Sanity-check pixel statistics; catches gain errors and rendering blow-ups.
+
+    STRATIFIED by source, deliberately. An earlier version drew 200 images
+    uniformly, and with the smallest source at 3.9% of the corpus that gave it
+    ~8 images. Per-image sd of ink fraction is ~0.010, so the standard error on
+    that row was ~0.004 -- and a 45% apparent gap got reported as a gain error
+    when the real difference in printed signal was 14%. Every source now gets
+    the same n, or all it has.
+
+    Read "ink frac" as a blow-up detector, not a measurement. It counts every
+    pixel below grey 100, which includes shadowed gridlines, not just the trace.
+    Printed path length computed from the signals is the precise instrument;
+    genuine cohort differences in QRS amplitude of 10-20% are normal and must
+    not trip this check.
+    """
     from PIL import Image
 
     rng = np.random.default_rng(C.SEED)
-    sample = [rows[i] for i in rng.choice(len(rows), min(n, len(rows)), replace=False)]
+    by_src = defaultdict(list)
+    for r in rows:
+        by_src[r["source"]].append(r)
+
+    sample = []
+    for src, rs in sorted(by_src.items()):
+        idx = rng.choice(len(rs), min(per_source, len(rs)), replace=False)
+        sample += [rs[i] for i in idx]
+    print(f"\n[3] image statistics ({per_source}/source, {len(sample)} images)")
 
     stats = defaultdict(list)
     sizes = set()
@@ -113,13 +134,24 @@ def check_images(rows: list[dict], n: int = 200) -> bool:
         stats[r["source"]].append((arr.mean(), (arr < 100).mean()))
 
     print(f"    distinct image sizes: {sorted(sizes)}")
-    print(f"    {'source':10s}{'mean lum':>10s}{'ink frac':>10s}")
+    print(f"    {'source':10s}{'n':>6s}{'mean lum':>10s}{'ink frac':>10s}{'SE':>9s}")
+    med = {}
     for src in sorted(stats):
-        vals = np.array(stats[src])
-        print(f"    {src:10s}{vals[:,0].mean():10.1f}{vals[:,1].mean():10.4f}")
-    print("    Ink fraction should be similar across sources; a large gap means")
-    print("    one source is rendering at the wrong gain.")
-    return len(sizes) == 1
+        v = np.array(stats[src])
+        se = v[:, 1].std(ddof=1) / np.sqrt(len(v)) if len(v) > 1 else float("nan")
+        med[src] = float(np.median(v[:, 1]))
+        print(f"    {src:10s}{len(v):6d}{v[:,0].mean():10.1f}{med[src]:10.4f}{se:9.4f}")
+
+    # A gain error is multiplicative and large -- a wrong ADU/mV is a factor of
+    # 2 or 10, never 14%. Threshold set so real cohort amplitude spread passes.
+    pooled = float(np.median(list(med.values())))
+    bad = {s: m for s, m in med.items() if abs(m - pooled) / pooled > 0.4}
+    for s, m in bad.items():
+        print(f"    FAIL {s}: ink {m:.4f} is {m/pooled:.2f}x the pooled median "
+              f"{pooled:.4f} -- check the gain for that source")
+    if not bad:
+        print(f"    every source within 40% of the pooled median {pooled:.4f}")
+    return len(sizes) == 1 and not bad
 
 
 # ------------------------------------------------------------------ 4. leakage
@@ -167,9 +199,16 @@ def check_leakage(rows: list[dict], per_source: int = 400, size: int = 64) -> bo
     # both sides and reports leakage that is really duplication.
     splitter = GroupShuffleSplit(n_splits=1, test_size=0.3, random_state=C.SEED)
     tr, te = next(splitter.split(X, y, groups))
-    clf = LogisticRegression(max_iter=400)
-    clf.fit(X[tr], y[tr])
-    acc = clf.score(X[te], y[te])
+    # Standardise first: raw 0-1 pixels left lbfgs hitting its iteration cap,
+    # and a probe that did not converge reports a floor, not an accuracy --
+    # which would read as a pass when the question is still open.
+    mu, sd = X[tr].mean(0), X[tr].std(0) + 1e-6
+    Xs = (X - mu) / sd
+    clf = LogisticRegression(max_iter=5000)
+    clf.fit(Xs[tr], y[tr])
+    acc = clf.score(Xs[te], y[te])
+    if np.max(clf.n_iter_) >= 5000:
+        print('    WARN: probe did not converge - treat the accuracy as a floor')
     chance = max(Counter(y[te]).values()) / len(y[te])
 
     print(f"    source accuracy {acc:.3f}   (chance {chance:.3f})")

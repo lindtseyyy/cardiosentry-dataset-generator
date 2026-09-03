@@ -1,0 +1,11 @@
+{
+  "model": "resnet50_cbam_nat768",
+  "image": "ECG000002_a0.jpg",
+  "source": "test_predictions.csv (prototype GPU+AMP)",
+  "scores": {
+    "STEMI": 0.005819959,
+    "AF": 0.9944666,
+    "LVH": 0.009376237,
+    "NORMAL": 0.0005274784
+  }
+}

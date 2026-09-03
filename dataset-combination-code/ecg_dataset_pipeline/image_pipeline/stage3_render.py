@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import subprocess
 import sys
 import time
@@ -106,7 +107,16 @@ def _run(job: tuple[str, Path, int]) -> tuple[str, int, str]:
         "-se", str(C.SEED + k),
         *C.KIT_RENDER_FLAGS,
     ]
-    proc = subprocess.run(cmd, cwd=str(C.KIT), capture_output=True, text=True)
+    # The kit is a SUBPROCESS, so anything config.py derives rather than reads
+    # from the environment has to be handed over explicitly - otherwise the kit
+    # falls back to its own defaults and the sheet silently ignores the build's
+    # layout. Bit us once: the row gaps live in config, and without this the kit
+    # fell back to its own defaults and ignored the build's spacing entirely.
+    env = dict(os.environ)
+    env["ECG_ROW_GAP"] = str(C.ROW_GAP)
+    env["ECG_RHYTHM_GAP"] = str(C.RHYTHM_GAP)
+    env["ECG_BOTTOM_RESERVE"] = str(C.BOTTOM_RESERVE)
+    proc = subprocess.run(cmd, cwd=str(C.KIT), capture_output=True, text=True, env=env)
     if proc.returncode != 0:
         tail = (proc.stderr or "").strip().splitlines()[-1:] or ["unknown error"]
         return tag, proc.returncode, tail[0]

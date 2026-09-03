@@ -1,0 +1,98 @@
+# CardioSentry model descriptor — round-3 geometry study, ResNet-50 + CBAM
+# at the sheet's NATIVE aspect (768x1024).
+#
+# A model = one .pt + this YAML. Swap models by adding two files and pointing
+# active.yaml at the new descriptor; zero application-code changes.
+schema_version: 1
+
+id: resnet50_cbam_nat768
+display_name: "CardioSentry ResNet-50 + CBAM @768x1024 (hybrids_v2)"
+version: hybrids_v2
+notes: "Run resnet50_cbam@nat768. Same protocol, same geometry and the same
+        attention block as efficientnetv2_s_cbam@nat768 — the backbone is the
+        only difference, which is what makes the pair comparable. Val
+        macro-AUPRC 0.9570 against the EfficientNetV2-S run's 0.9571: a tie at
+        the headline, but this one is markedly stronger on STEMI (val AUPRC
+        0.9701 vs 0.9476, sensitivity 0.9236 vs 0.8194).
+
+        KNOWN TRAIN/SERVE GAP. The corpus this ran on had the printed
+        ID/Age/Sex block painted out (hybrids_v2 REDACT_BOX =
+        [0.10, 0.02, 0.30, 0.18]); the application deliberately does NOT redact
+        uploaded photographs. The model therefore sees a header band it never
+        saw printed text in, and its score for a corpus sheet will not
+        reproduce that sheet's stored prototype score exactly. Report real-photo
+        results with that stated.
+
+        That gap deserves more attention on THIS model than on the
+        EfficientNetV2-S one: the record ID is a perfect STEMI separator in the
+        training corpus, and STEMI is exactly where this run's advantage lies."
+
+weights: weights/resnet50_cbam_nat768.pt
+expected_sha256: d1a8c02df661a385defe3386143212b6c2fc2f452a4eb66002ea26bbc8420ab9
+# This checkpoint stores only `fingerprint` (protocol AND geometry, the
+# hybrids_v2 `config.fingerprint()`), which the runner falls back to. It is the
+# stricter of the two hashes: it pins the geometry as well as the protocol, so a
+# checkpoint trained at a different CS_DIM cannot load against this descriptor.
+# The protocol-only hash for this run is 36988c5e0ba5d72d — the same one the
+# resnet50_* round-2 descriptors carry, which is what makes the rounds
+# comparable.
+expected_protocol_fingerprint: e0fef6cd72607f35
+
+architecture:
+  module: arch.hybrids_v2          # vendored package (backend/arch/)
+  registry_key: resnet50_cbam
+  pretrained: false                # weights are overwritten anyway
+  call_style: tensor               # HybridModel.forward takes a plain tensor (F3)
+  views: [[768, 1024]]             # [height, width] — torch order, not PIL's
+
+labels: [STEMI, AF, LVH, NORMAL]   # order MUST match the checkpoint's head (F1)
+display_names:
+  STEMI: "ST-Elevation MI (STEMI)"
+  AF: "Atrial Fibrillation"
+  LVH: "Left Ventricular Hypertrophy"
+  NORMAL: "Normal"
+
+thresholds:
+  source: checkpoint               # frozen per-class thresholds tuned on the
+  explicit: null                   # synthetic val split: [0.32, 0.84, 0.79, 0.53]
+
+preprocess:
+  canvas: [1650, 1275]             # warp destination (pre-margin), 150 DPI sheet
+  margin_px: 18
+  input_size: [768, 1024]          # [height, width]; 3.59 px/mm time, 3.46 voltage
+  resample: pil_bicubic
+  match_training_jpeg: true        # in-memory q95 round-trip (resize_dataset)
+  jpeg_quality: 95
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+runtime:
+  device: cpu
+  dtype: float32
+  num_threads: null           # null = settings.num_threads (env-overridable)
+
+explain:
+  enabled: true
+  # Pinned rather than left to auto-discovery. Auto resolves to `attn` for this
+  # checkpoint today, but the rule it uses is "the last 4-D feature map", and a
+  # hybrid built with the lightweight transformer would put `lt.proj` there
+  # instead. `attn` is the CBAM output — the exact tensor forward_head pools.
+  target_layer: attn
+  # The printed ID/Age/Sex block, as (x0, y0, x1, y1) fractions. This is
+  # hybrids_v2's REDACT_BOX verbatim: the rectangle this run trained with
+  # PAINTED OUT. No pixels are altered here — every attribution map is scored
+  # for how much of its mass lands inside it.
+  header_box: [0.10, 0.02, 0.30, 0.18]
+  # True: this checkpoint never saw printed text in that band. The application
+  # does not redact an uploaded photograph, so attribution landing there is
+  # both out of distribution AND on the record ID that separates STEMI exactly
+  # in the corpus. Two reasons to disbelieve the score, not one.
+  header_redacted_in_training: true
+
+verify:
+  # Pinned so this descriptor is checked against ITS run's stored vector
+  # whichever model is active. Reproduces well inside the 2e-3 default, so no
+  # tolerance override.
+  expected_scores: tests/fixtures/expected_scores_resnet50_cbam_nat768.json
+  score_tolerance: null

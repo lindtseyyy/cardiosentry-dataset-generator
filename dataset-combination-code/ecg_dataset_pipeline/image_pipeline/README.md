@@ -68,6 +68,29 @@ CSV=../data/harmonized/harmonized_ecg_metadata.csv ./run_all.sh
 WORKERS=4 ./run_all.sh
 ```
 
+### Filter-variant releases (0.05–100 Hz / 0.05–150 Hz)
+
+The band-pass is the only thing that varies: `config.py` reads
+`BANDPASS = (0.05, float(os.environ["ECG_LOWPASS_HZ"] or "40"))`, so a variant
+build through the same stages is:
+
+```bash
+ECG_RELEASE=v2_100hz ECG_LOWPASS_HZ=100 ./run_all.sh
+ECG_RELEASE=v2_150hz ECG_LOWPASS_HZ=150 ./run_all.sh
+```
+
+`ECG_RELEASE` points the pipeline at
+`data/releases/<release>/balanced/balanced_ecg_metadata.csv` as input and
+`data/releases/<release>/synthetic_data/` as output. The staged WFDB data
+embeds the filter, so a variant release cannot reuse `v2/synthetic_data`
+intermediates: stages 2–5 rerun for each cutoff; stage 1 is filter-independent
+but cheap and reruns anyway. `generate_both.sh` orchestrates both releases
+sequentially (each validated before the next starts):
+
+```bash
+./generate_both.sh                    # v2_100hz, then v2_150hz; logs/ has the log
+```
+
 Stages are idempotent — 3 and 4 skip work that already exists — so an
 interrupted build restarts with the same command. Before resuming, check for
 orphaned kit workers left behind by an interrupted run:
@@ -159,7 +182,7 @@ Train from `index.csv` — the four binary columns, not the directory name.
 |---|---|
 | Layout | 3×4 with continuous lead II rhythm strip |
 | Paper speed / gain | 25 mm/s, 10 mm/mV |
-| Signal band | 0.05–40 Hz |
+| Signal band | 0.05–40 Hz (default; `ECG_LOWPASS_HZ` overrides the low-pass per build) |
 | Resolution | 150 DPI → 1686 × 1311 px (1722 × 1347 after margin) |
 | Format | JPEG q85, 4:2:0 |
 | Grid | grey — major `(0.4,0.4,0.4)`, minor `(0.75,0.75,0.75)`, black trace |
@@ -479,6 +502,9 @@ Each of these cost real debugging time in the prototype. Don't redo it.
   Same arithmetic behind both: at 150 DPI and 25 mm/s the paper carries
   147.6 px/s, so image Nyquist is 73.8 Hz. 150 Hz cannot be represented at any
   DPI this corpus renders at and would only alias against the 1 mm grid.
+  (`ECG_LOWPASS_HZ` exists so controlled filter-variant releases can be built
+  for the bandwidth experiment anyway — content above ~74 Hz aliases there;
+  the variant releases say so in their READMEs.)
 - **Amplitude is never normalised across sources** — that would erase the
   voltage criteria LVH is defined by. Only filtering and baseline are
   harmonised, and identically for every source, because that harmonisation is

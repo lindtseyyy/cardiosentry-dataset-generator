@@ -1,0 +1,109 @@
+# CardioSentry model descriptor — round-3 geometry study, PLAIN EfficientNetV2-S
+# (no CBAM, no transformer) at the sheet's NATIVE aspect (768x1024).
+#
+# A model = one .pt + this YAML. Swap models by adding two files and pointing
+# active.yaml at the new descriptor; zero application-code changes.
+schema_version: 1
+
+id: efficientnetv2_s_nat768
+display_name: "CardioSentry EfficientNetV2-S @768x1024 (baselines_v2)"
+version: baselines_v2
+notes: "Run efficientnetv2_s@nat768 — the UNMODIFIED backbone, the baseline the
+        hybrids are measured against. `build()` is a plain
+        timm.create_model('tf_efficientnetv2_s.in1k', num_classes=4) with no
+        wrapper, which is why this checkpoint is a bare timm state_dict
+        (conv_stem…classifier) and needs arch.baselines_v2 rather than
+        arch.hybrids_v2 — the hybrids package would look for backbone.*/attn.*
+        keys and refuse under strict=True.
+
+        Val macro-AUPRC 0.9501, vs 0.9571 for efficientnetv2_s_cbam_nat768 and
+        0.9570 for resnet50_cbam_nat768. Same protocol and geometry as both
+        (protocol fingerprint 36988c5e0ba5d72d), so the three are directly
+        comparable.
+
+        KNOWN TRAIN/SERVE GAP. The corpus this ran on had the printed
+        ID/Age/Sex block painted out (REDACT_BOX = [0.10, 0.02, 0.30, 0.18]);
+        the application deliberately does NOT redact uploaded photographs. The
+        model therefore sees a header band it never saw printed text in, and
+        its score for a corpus sheet will not reproduce that sheet's stored
+        prototype score exactly. Report real-photo results with that stated."
+
+weights: weights/efficientnetv2_s_nat768.pt
+expected_sha256: 4003f0642dbfb79703c8c8c242b79a4bc9da2a058723e11573dcb9b4ec362156
+# This checkpoint stores only `fingerprint` (protocol AND geometry, the
+# baselines_v2 `config.fingerprint()`), which the runner falls back to. It is
+# the stricter of the two hashes: it pins the geometry as well as the protocol,
+# so a checkpoint trained at a different CS_DIM cannot load against this
+# descriptor. The protocol-only hash for this run is 36988c5e0ba5d72d — the
+# same one every round-3 descriptor carries, which is what makes the runs
+# comparable.
+expected_protocol_fingerprint: e0fef6cd72607f35
+
+architecture:
+  module: arch.baselines_v2        # vendored package (backend/arch/)
+  registry_key: efficientnetv2_s
+  pretrained: false                # weights are overwritten anyway
+  call_style: tensor               # timm classifier takes a plain tensor (F3)
+  views: [[768, 1024]]             # [height, width] — torch order, not PIL's
+
+labels: [STEMI, AF, LVH, NORMAL]   # order MUST match the checkpoint's head (F1)
+display_names:
+  STEMI: "ST-Elevation MI (STEMI)"
+  AF: "Atrial Fibrillation"
+  LVH: "Left Ventricular Hypertrophy"
+  NORMAL: "Normal"
+
+thresholds:
+  source: checkpoint               # frozen per-class thresholds tuned on the
+  explicit: null                   # synthetic val split: [0.54, 0.21, 0.69, 0.86]
+
+preprocess:
+  canvas: [1650, 1275]             # warp destination (pre-margin), 150 DPI sheet
+  margin_px: 18
+  input_size: [768, 1024]          # [height, width]; 3.59 px/mm time, 3.46 voltage
+  resample: pil_bicubic
+  match_training_jpeg: true        # in-memory q95 round-trip (resize_dataset)
+  jpeg_quality: 95
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+runtime:
+  device: cpu
+  dtype: float32
+  num_threads: null           # null = settings.num_threads (env-overridable)
+
+explain:
+  enabled: true
+  # Pinned rather than left to auto-discovery. `bn2` is the activated
+  # post-conv_head feature map (24x32 x 1280) — the exact tensor global_pool
+  # reduces before the classifier, and what auto resolves to today. There is no
+  # `attn` here: this is the unmodified backbone, so the CBAM output the
+  # hybrids_v2 descriptors point at does not exist.
+  target_layer: bn2
+  # The printed ID/Age/Sex block, as (x0, y0, x1, y1) fractions. This is
+  # baselines_v2's REDACT_BOX verbatim: the rectangle this run trained with
+  # PAINTED OUT. No pixels are altered here — every attribution map is scored
+  # for how much of its mass lands inside it.
+  header_box: [0.10, 0.02, 0.30, 0.18]
+  # True: this checkpoint never saw printed text in that band. The application
+  # does not redact an uploaded photograph, so attribution landing there is
+  # both out of distribution AND on the record ID that separates STEMI exactly
+  # in the corpus. Two reasons to disbelieve the score, not one.
+  header_redacted_in_training: true
+
+verify:
+  # The startup self-check compares THIS run's stored GPU+AMP vector for the
+  # fixture sheet against the CPU serving path.
+  expected_scores: tests/fixtures/expected_scores_efficientnetv2_s_nat768.json
+  # MEASURED, not guessed. On tests/fixtures/corpus_sheet.jpg this checkpoint
+  # reproduces its stored vector to 6.7e-3 as served, and to 2.8e-3 once the
+  # training REDACT_BOX is painted on — i.e. the printed ID the app does not
+  # redact is most of the gap, and it lands almost entirely on the AF head
+  # (0.9254 served vs 0.9321 stored). The residual is the CPU-fp32 vs GPU-AMP
+  # gap, which shows up here and not on the CBAM runs only because this run's
+  # AF score is unsaturated: 2e-3 of probability at p=0.93 is a ~0.03 logit
+  # bound, where at the CBAM run's p=0.9988 the same number allows ~2.0.
+  # 1e-2 keeps the check able to catch real timm/weights drift (which moves
+  # scores by far more) without failing every boot on a documented difference.
+  score_tolerance: 1.0e-2

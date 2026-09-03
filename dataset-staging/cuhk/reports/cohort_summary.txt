@@ -1,0 +1,74 @@
+CUHK ECG collection -- staged cohort summary
+====================================================================
+XML files scanned                : 67431
+  duplicate copies removed       : 5713 (same acquisition in >1 cohort folder)
+unique acquisitions              : 61718
+  dropped, EXCLUDE_RECORD label  : 14685
+  dropped, no target label       : 29060
+  CANDIDATES (>=1 target label)  : 17973
+
+candidates by class (multi-label: a record may appear in several)
+  STEMI   records=2612   patients=957
+  AF      records=8152   patients=1588
+  LVH     records=9995   patients=1912
+  NORMAL  records=0      patients=0
+
+MULTI-LABEL BREAKDOWN (exact label combination per record)
+  combination             records   % of candidates
+  LVH                        7426             41.3%
+  AF                         5814             32.3%
+  AF+LVH                     2121             11.8%
+  STEMI                      1990             11.1%
+  STEMI+LVH                   405              2.3%
+  STEMI+AF                    174              1.0%
+  STEMI+AF+LVH                 43              0.2%
+  ----------------------------------------------
+  single-label              15230
+  multi-label (>=2)          2743             15.3%
+
+BY SOURCE COHORT (the folder a record came from -- provenance, NOT a
+label; every label above comes from the Philips statements only)
+  cohort            records   STEMI      AF     LVH
+  HF                   7138     296    4442    3671
+  STEMI                3604    1758     774    1507
+  NSTEMI               2291     168     843    1570
+  MIXED_REDACTED       2039     132     837    1436
+  PERICARDITIS         1910     205     903    1086
+  HF_AS                 933      47     330     689
+  MYOCARDITIS            58       6      23      36
+
+distinct patient groups in candidate set : 2726
+distinct patient groups in whole dataset : 3897
+  (a 'patient group' is the 4-character anonymised id prefix -- see
+   patient_group() in this script: it over-groups, never under-groups)
+
+records per patient group in the candidate set (serial ECGs -- these
+MUST be grouped by `split_group_id` when splitting):
+  min=1 median=4 max=65 mean=6.59
+
+top exclusion reasons:
+   29060  NO_TARGET_LABEL
+    4476  EXCLUDE_RECORD:NFADPR
+    4144  EXCLUDE_RECORD:EP
+    1262  EXCLUDE_RECORD:NFAD
+     761  EXCLUDE_RECORD:NFRA
+     687  EXCLUDE_RECORD:ASVP
+     524  EXCLUDE_RECORD:VPACEC
+     519  EXCLUDE_RECORD:STELVH
+     492  EXCLUDE_RECORD:VPACE
+     482  EXCLUDE_RECORD:AMI17
+     461  EXCLUDE_RECORD:AMI61A
+     458  EXCLUDE_RECORD:ALIR
+     424  EXCLUDE_RECORD:EPD
+     421  EXCLUDE_RECORD:VPACCF
+     362  EXCLUDE_RECORD:ASVPC
+     359  EXCLUDE_RECORD:MSTEI
+     344  EXCLUDE_RECORD:BSTEI
+     310  EXCLUDE_RECORD:AMI66
+     301  EXCLUDE_RECORD:DIS15
+     281  EXCLUDE_RECORD:IMI74
+     275  EXCLUDE_RECORD:VPACEF
+     271  EXCLUDE_RECORD:IMI67
+     261  EXCLUDE_RECORD:ALI94
+     224  EXCLUDE_RECORD:STE21B
+     215  EXCLUDE_RECORD:MISLDS
