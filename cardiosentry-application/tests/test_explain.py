@@ -75,6 +75,7 @@ def test_auto_target_layer_per_family(client):
                 # `attn` to find — the deepest map is the activated conv_head
                 # output the classifier pools.
                 "efficientnetv2_s_nat768": "bn2",
+                "convnextv2_tiny_nat768": "stages.3",
                 "resnet50_hires": "backbone.layer4",
                 "resnet50_dual": "hi.layer4",
                 "resnet50_v1": "layer4"}

@@ -1,0 +1,60 @@
+# CardioSentry model descriptor — ConvNeXt-V2 Tiny with Global Response Normalization (GRN)
+# at the sheet's native aspect ratio (768x1024).
+schema_version: 1
+
+id: convnextv2_tiny_nat768
+display_name: "CardioSentry ConvNeXt-V2 Tiny @768x1024 (baselines_v2)"
+version: baselines_v2
+notes: "Run convnextv2_tiny@nat768 — ConvNeXt-V2 Tiny with Global Response Normalization
+        (GRN) at the sheet's native aspect ratio (768x1024).
+
+        Val macro-AUROC 0.9790, macro-AUPRC 0.9520, macro-F1 0.9057.
+        Trained thresholds: STEMI 0.73, AF 0.65, LVH 0.92, NORMAL 0.88.
+        Protocol fingerprint: e0fef6cd72607f35 (protocol hash: 36988c5e0ba5d72d)."
+
+weights: weights/convnextv2_tiny@nat768.pt
+expected_sha256: b1f310d5178f0778a32b82591193376659b70a90c5981547d4feba96b766d398
+expected_protocol_fingerprint: e0fef6cd72607f35
+
+architecture:
+  module: arch.baselines_v2
+  registry_key: convnextv2_tiny
+  pretrained: false
+  call_style: tensor
+  views: [[768, 1024]]
+
+labels: [STEMI, AF, LVH, NORMAL]
+display_names:
+  STEMI: "ST-Elevation MI (STEMI)"
+  AF: "Atrial Fibrillation"
+  LVH: "Left Ventricular Hypertrophy"
+  NORMAL: "Normal"
+
+thresholds:
+  source: checkpoint
+
+preprocess:
+  canvas: [1650, 1275]
+  margin_px: 18
+  input_size: [768, 1024]
+  resample: pil_bicubic
+  match_training_jpeg: true
+  jpeg_quality: 95
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+runtime:
+  device: cpu
+  dtype: float32
+  num_threads: null
+
+explain:
+  enabled: true
+  target_layer: stages.3
+  header_box: [0.10, 0.02, 0.30, 0.18]
+  header_redacted_in_training: true
+
+verify:
+  expected_scores: tests/fixtures/expected_scores_convnextv2_tiny_nat768.json
+  score_tolerance: 2e-3

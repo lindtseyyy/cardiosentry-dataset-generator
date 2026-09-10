@@ -1,0 +1,11 @@
+{
+  "model": "convnextv2_tiny_nat768",
+  "image": "ECG000002_a0.jpg",
+  "source": "test_predictions.csv (prototype GPU+AMP)",
+  "scores": {
+    "STEMI": 0.0011972112,
+    "AF": 0.9837225,
+    "LVH": 0.2874677,
+    "NORMAL": 0.0040701376
+  }
+}

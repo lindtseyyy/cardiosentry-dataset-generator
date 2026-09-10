@@ -153,6 +153,15 @@ REGISTRY: dict[str, dict] = {
         "note": "GRN replaces LayerScale. Same corpus as convnext_base, "
                 "different recipe - see asymmetry 1.",
     },
+    "convnextv2_tiny": {
+        "timm": "convnextv2_tiny.fcmae_ft_in1k",
+        "micro_batch": 8,
+        "pretrain": "ImageNet-1k (FCMAE self-supervised -> in1k fine-tune)",
+        "family": "cnn",
+        "params_m": 28.6,
+        "note": "GRN replaces LayerScale. ConvNeXt-V2 Tiny with 768 final channels.",
+    },
+
 
     # ------------------------------------------------------------ transformers
     "vit_b16": {
