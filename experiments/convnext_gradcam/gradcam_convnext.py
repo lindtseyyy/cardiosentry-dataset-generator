@@ -124,14 +124,17 @@ def compute_gradcam(
     input_tensor: torch.Tensor,
     target_layer_name: str,
     device: str = "cpu",
-) -> tuple[torch.Tensor, dict[str, np.ndarray], dict]:
-    """Compute Grad-CAM for all 4 diagnostic classes.
+    method: str = "gradcam++",
+) -> tuple[torch.Tensor, dict[str, np.ndarray] | dict[str, dict[str, np.ndarray]], dict]:
+    """Compute Grad-CAM or Grad-CAM++ for all 4 diagnostic classes.
 
-    Uses late-graph autograd: forward pass runs with detached leaf at the
-    target module, recording autograd only from the target activations forward.
+    Supports:
+      - 'gradcam': Standard gradient average pooling.
+      - 'gradcam++': Higher-order positive-gradient weighting (Chattopadhyay et al., 2018).
+      - 'both': Computes both and returns a nested dictionary {'gradcam': ..., 'gradcam++': ...}.
     """
     layer_name, module = resolve_layer(model, target_layer_name)
-    print(f"Grad-CAM target layer resolved to: {layer_name} ({type(module).__name__})")
+    print(f"CAM target layer resolved to: {layer_name} ({type(module).__name__}) [Method: {method.upper()}]")
 
     activation: dict[str, torch.Tensor] = {}
 
@@ -162,27 +165,39 @@ def compute_gradcam(
             acts = activation["act"]  # (1, C, H, W)
             _, channels, gh, gw = acts.shape
 
-            cams: dict[str, np.ndarray] = {}
+            cams_vanilla: dict[str, np.ndarray] = {}
+            cams_plusplus: dict[str, np.ndarray] = {}
 
             for idx, label in enumerate(LABELS):
                 score = logits[0, idx]
                 grads = torch.autograd.grad(score, acts, retain_graph=(idx < len(LABELS) - 1))[0]
 
-                # Channel weights = Global Average Pooling of gradients
-                alpha = grads.mean(dim=(2, 3), keepdim=True)  # (1, C, 1, 1)
+                # 1. Vanilla Grad-CAM
+                if method in ("gradcam", "both"):
+                    alpha = grads.mean(dim=(2, 3), keepdim=True)  # (1, C, 1, 1)
+                    cam_v = torch.relu((alpha * acts).sum(dim=1, keepdim=True))  # (1, 1, gh, gw)
+                    cam_v = cam_v.squeeze().detach().cpu().numpy().astype(np.float32)
+                    c_min, c_max = cam_v.min(), cam_v.max()
+                    cam_v = (cam_v - c_min) / (c_max - c_min) if (c_max - c_min > 1e-8) else np.zeros_like(cam_v)
+                    cams_vanilla[label] = cam_v
 
-                # Positive weighted activation combination
-                cam = torch.relu((alpha * acts).sum(dim=1, keepdim=True))  # (1, 1, gh, gw)
-                cam = cam.squeeze().detach().cpu().numpy().astype(np.float32)
+                # 2. Grad-CAM++ (Chattopadhyay et al., 2018)
+                if method in ("gradcam++", "both"):
+                    grads_2 = grads ** 2
+                    grads_3 = grads_2 * grads
+                    spatial_sum_act = acts.sum(dim=(2, 3), keepdim=True)  # (1, C, 1, 1)
+                    eps = 1e-7
+                    denom = 2.0 * grads_2 + spatial_sum_act * grads_3 + eps
+                    alpha_ij = grads_2 / denom
+                    alpha_ij = torch.where(grads != 0, alpha_ij, torch.zeros_like(alpha_ij))
 
-                # Normalize to [0, 1]
-                c_min, c_max = cam.min(), cam.max()
-                if c_max - c_min > 1e-8:
-                    cam = (cam - c_min) / (c_max - c_min)
-                else:
-                    cam = np.zeros_like(cam)
-
-                cams[label] = cam
+                    # Weighted positive gradient summation over spatial grid
+                    w_k = (alpha_ij * torch.relu(grads)).sum(dim=(2, 3), keepdim=True)  # (1, C, 1, 1)
+                    cam_pp = torch.relu((w_k * acts).sum(dim=1, keepdim=True))
+                    cam_pp = cam_pp.squeeze().detach().cpu().numpy().astype(np.float32)
+                    c_min, c_max = cam_pp.min(), cam_pp.max()
+                    cam_pp = (cam_pp - c_min) / (c_max - c_min) if (c_max - c_min > 1e-8) else np.zeros_like(cam_pp)
+                    cams_plusplus[label] = cam_pp
 
     finally:
         handle.remove()
@@ -191,8 +206,15 @@ def compute_gradcam(
         "target_layer": layer_name,
         "feature_grid": (gh, gw),
         "channels": channels,
+        "method": method,
     }
-    return probs.cpu(), cams, meta
+
+    if method == "both":
+        return probs.detach().cpu(), {"gradcam": cams_vanilla, "gradcam++": cams_plusplus}, meta
+    elif method == "gradcam":
+        return probs.detach().cpu(), cams_vanilla, meta
+    else:
+        return probs.detach().cpu(), cams_plusplus, meta
 
 
 def overlay_cam_on_image(
@@ -220,43 +242,43 @@ def save_per_condition_overlays(
     meta: dict,
     out_dir: Path,
     image_stem: str,
+    method_name: str = "Grad-CAM++",
 ) -> dict[str, Path]:
     """Save high-resolution Grad-CAM overlay per clinical condition."""
     out_dir.mkdir(parents=True, exist_ok=True)
     saved_paths: dict[str, Path] = {}
 
     h, w = rgb_img.shape[:2]
+    method_slug = "gradcampp" if ("++" in method_name or "plus" in method_name.lower()) else "gradcam"
 
     for i, label in enumerate(LABELS):
-        p = float(probs[i])
+        p = float(probs[i].detach() if hasattr(probs[i], "detach") else probs[i])
         thresh = float(thresholds[i])
         is_pos = p >= thresh
 
         overlay = overlay_cam_on_image(rgb_img, cams[label], alpha=0.45)
 
-        # Draw a sleek professional diagnostic badge on top
-        annotated = overlay.copy()
+        # Sleek dark slate diagnostic header badge
         badge_h = 60
         header = np.zeros((badge_h, w, 3), dtype=np.uint8)
-        header[:] = (20, 24, 28)  # dark slate background
+        header[:] = (20, 24, 28)
 
         status_text = "POSITIVE" if is_pos else "NEGATIVE"
-        badge_color = (60, 220, 100) if (is_pos and label != "NORMAL") or (not is_pos and label == "NORMAL") else (
-            (80, 80, 240) if is_pos else (180, 180, 180)
-        )
         if is_pos and label != "NORMAL":
-            badge_color = (60, 70, 240)  # red/crimson in BGR
+            badge_color = (60, 70, 240)  # Red / high alert
         elif is_pos and label == "NORMAL":
-            badge_color = (60, 220, 100) # green in BGR
+            badge_color = (60, 220, 100)  # Green
+        else:
+            badge_color = (180, 180, 180)  # Muted
 
-        text_left = f"{DISPLAY_NAMES[label]}"
+        text_left = f"{DISPLAY_NAMES[label]} [{method_name}]"
         text_right = f"Prob: {p:.4f}  |  Thresh: {thresh:.2f}  [{status_text}]"
 
-        cv2.putText(header, text_left, (20, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.putText(header, text_right, (w - 520, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.8, badge_color, 2, cv2.LINE_AA)
+        cv2.putText(header, text_left, (20, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255, 255, 255), 2, cv2.LINE_AA)
+        cv2.putText(header, text_right, (w - 560, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.8, badge_color, 2, cv2.LINE_AA)
 
-        combined = np.vstack([header, annotated])
-        cond_out_path = out_dir / f"{image_stem}_gradcam_{label}.png"
+        combined = np.vstack([header, annotated if 'annotated' in locals() else overlay])
+        cond_out_path = out_dir / f"{image_stem}_{method_slug}_{label}.png"
         cv2.imwrite(str(cond_out_path), cv2.cvtColor(combined, cv2.COLOR_RGB2BGR))
         saved_paths[label] = cond_out_path
 
@@ -270,6 +292,7 @@ def render_composite_figure(
     thresholds: list[float],
     meta: dict,
     out_path: Path,
+    method_title: str = "Grad-CAM++",
 ):
     """Save high-resolution diagnostic composite plot."""
     fig, axes = plt.subplots(5, 1, figsize=(14, 22), dpi=150)
@@ -286,10 +309,10 @@ def render_composite_figure(
     )
     axes[0].axis("off")
 
-    # 2-5. Grad-CAM heatmaps per diagnosis
+    # 2-5. Heatmaps per diagnosis
     for i, label in enumerate(LABELS):
         ax = axes[i + 1]
-        p = float(probs[i])
+        p = float(probs[i].detach() if hasattr(probs[i], "detach") else probs[i])
         thresh = float(thresholds[i])
         is_pos = p >= thresh
 
@@ -299,7 +322,7 @@ def render_composite_figure(
         verdict_color = "#FF4444" if (is_pos and label != "NORMAL") else ("#00E676" if is_pos else "#888888")
         status_text = "POSITIVE" if is_pos else "NEGATIVE"
 
-        title = f"{DISPLAY_NAMES[label]} | Probability: {p:.4f} vs Threshold: {thresh:.2f} [{status_text}]"
+        title = f"[{method_title}] {DISPLAY_NAMES[label]} | Probability: {p:.4f} vs Threshold: {thresh:.2f} [{status_text}]"
         ax.set_title(title, color=verdict_color, fontsize=12, fontweight="bold", pad=8)
         ax.axis("off")
 
@@ -307,12 +330,69 @@ def render_composite_figure(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(out_path, bbox_inches="tight", facecolor=fig.get_facecolor(), edgecolor="none")
     plt.close(fig)
-    print(f"\nSaved composite Grad-CAM visualization to: {out_path.resolve()}")
+    print(f"Saved composite visualization to: {out_path.resolve()}")
 
+
+def render_comparison_figure(
+    rgb_img: np.ndarray,
+    probs: torch.Tensor,
+    cams_vanilla: dict[str, np.ndarray],
+    cams_plusplus: dict[str, np.ndarray],
+    thresholds: list[float],
+    meta: dict,
+    out_path: Path,
+):
+    """Save side-by-side comparison figure: Vanilla Grad-CAM vs Grad-CAM++."""
+    fig, axes = plt.subplots(5, 2, figsize=(20, 24), dpi=150)
+    fig.patch.set_facecolor("#121417")
+
+    # Row 0: Original ECG spans across both columns
+    ax_ecg = plt.subplot2grid((5, 2), (0, 0), colspan=2, fig=fig)
+    ax_ecg.imshow(rgb_img)
+    ax_ecg.set_title(
+        f"Input ECG Photograph ({rgb_img.shape[1]}x{rgb_img.shape[0]} px) | Target: {meta['target_layer']} ({meta['feature_grid'][1]}x{meta['feature_grid'][0]}, {meta['channels']} ch)",
+        color="#FFFFFF", fontsize=13, fontweight="bold", pad=8
+    )
+    ax_ecg.axis("off")
+    axes[0, 0].axis("off")
+    axes[0, 1].axis("off")
+
+    for i, label in enumerate(LABELS):
+        p = float(probs[i].detach() if hasattr(probs[i], "detach") else probs[i])
+        thresh = float(thresholds[i])
+        is_pos = p >= thresh
+        verdict_color = "#FF4444" if (is_pos and label != "NORMAL") else ("#00E676" if is_pos else "#888888")
+        status_text = "POSITIVE" if is_pos else "NEGATIVE"
+
+        # Col 0: Vanilla Grad-CAM
+        ax_v = axes[i + 1, 0]
+        ov_v = overlay_cam_on_image(rgb_img, cams_vanilla[label], alpha=0.45)
+        ax_v.imshow(ov_v)
+        ax_v.set_title(
+            f"[Vanilla Grad-CAM] {DISPLAY_NAMES[label]} (P: {p:.4f}, Th: {thresh:.2f} [{status_text}])",
+            color=verdict_color, fontsize=11, fontweight="bold", pad=6
+        )
+        ax_v.axis("off")
+
+        # Col 1: Grad-CAM++
+        ax_pp = axes[i + 1, 1]
+        ov_pp = overlay_cam_on_image(rgb_img, cams_plusplus[label], alpha=0.45)
+        ax_pp.imshow(ov_pp)
+        ax_pp.set_title(
+            f"[Grad-CAM++] {DISPLAY_NAMES[label]} (P: {p:.4f}, Th: {thresh:.2f} [{status_text}])",
+            color=verdict_color, fontsize=11, fontweight="bold", pad=6
+        )
+        ax_pp.axis("off")
+
+    plt.tight_layout()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(out_path, bbox_inches="tight", facecolor=fig.get_facecolor(), edgecolor="none")
+    plt.close(fig)
+    print(f"Saved side-by-side comparison visualization to: {out_path.resolve()}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Grad-CAM on ConvNeXt ECG Model.")
+    parser = argparse.ArgumentParser(description="Run Grad-CAM and Grad-CAM++ on ConvNeXt ECG Model.")
     parser.add_argument(
         "--image",
         type=Path,
@@ -338,9 +418,16 @@ def main():
         help="Layer to target with Grad-CAM.",
     )
     parser.add_argument(
+        "--method",
+        type=str,
+        choices=["gradcam", "gradcam++", "both"],
+        default="both",
+        help="Explainability method to compute.",
+    )
+    parser.add_argument(
         "--out",
         type=Path,
-        default=Path("experiments/convnext_gradcam/convnext_gradcam_overlay.png"),
+        default=None,
         help="Output path for the generated composite visualization.",
     )
     parser.add_argument(
@@ -373,49 +460,67 @@ def main():
     print(f"Preprocessing {args.image} to ({args.height}, {args.width})...")
     tensor, rgb_img = preprocess_ecg(args.image, input_hw=(args.height, args.width))
 
-    print(f"Computing Grad-CAM with target layer: {args.target_layer}...")
+    print(f"Computing [{args.method.upper()}] with target layer: {args.target_layer}...")
     probs, cams, cam_meta = compute_gradcam(
         model=model,
         input_tensor=tensor,
         target_layer_name=args.target_layer,
         device=device,
+        method=args.method,
     )
 
     print("\n--- Model Predictions ---")
     for i, label in enumerate(LABELS):
-        p = float(probs[i])
+        p = float(probs[i].detach() if hasattr(probs[i], "detach") else probs[i])
         th = float(thresholds[i])
         flag = " [POSITIVE]" if p >= th else ""
         print(f"  {label:<8}: prob = {p:8.4f} (threshold = {th:.2f}){flag}")
 
-    out_dir = args.out.parent if args.out.suffix else args.out
     stem = args.image.stem
-    cond_paths = save_per_condition_overlays(
-        rgb_img=rgb_img,
-        probs=probs,
-        cams=cams,
-        thresholds=thresholds,
-        meta=cam_meta,
-        out_dir=out_dir,
-        image_stem=stem,
-    )
+    out_dir = args.out.parent if (args.out and args.out.suffix) else (args.out or Path(f"experiments/convnext_gradcam/results/{stem}"))
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    composite_path = (out_dir / f"{stem}_gradcam_composite.png") if not args.out.suffix else args.out
-    render_composite_figure(
-        rgb_img=rgb_img,
-        probs=probs,
-        cams=cams,
-        thresholds=thresholds,
-        meta=cam_meta,
-        out_path=composite_path,
-    )
+    if args.method == "both":
+        cams_v = cams["gradcam"]
+        cams_pp = cams["gradcam++"]
 
-    print("\n--- Generated Grad-CAM Output Images ---")
-    for label, path in cond_paths.items():
-        print(f"  {label:<8} overlay: {path.resolve()}")
-    print(f"  Composite figure : {composite_path.resolve()}")
+        # Save Grad-CAM++ overlays
+        save_per_condition_overlays(
+            rgb_img=rgb_img, probs=probs, cams=cams_pp, thresholds=thresholds,
+            meta=cam_meta, out_dir=out_dir, image_stem=stem, method_name="Grad-CAM++"
+        )
+        # Save Vanilla Grad-CAM overlays
+        save_per_condition_overlays(
+            rgb_img=rgb_img, probs=probs, cams=cams_v, thresholds=thresholds,
+            meta=cam_meta, out_dir=out_dir, image_stem=stem, method_name="Grad-CAM"
+        )
 
+        comp_pp_path = out_dir / f"{stem}_gradcampp_composite.png"
+        render_composite_figure(
+            rgb_img=rgb_img, probs=probs, cams=cams_pp, thresholds=thresholds,
+            meta=cam_meta, out_path=comp_pp_path, method_title="Grad-CAM++"
+        )
+
+        comparison_path = out_dir / f"{stem}_gradcam_vs_gradcampp.png"
+        render_comparison_figure(
+            rgb_img=rgb_img, probs=probs, cams_vanilla=cams_v, cams_plusplus=cams_pp,
+            thresholds=thresholds, meta=cam_meta, out_path=comparison_path
+        )
+    else:
+        active_method = "Grad-CAM++" if args.method == "gradcam++" else "Grad-CAM"
+        cond_paths = save_per_condition_overlays(
+            rgb_img=rgb_img, probs=probs, cams=cams, thresholds=thresholds,
+            meta=cam_meta, out_dir=out_dir, image_stem=stem, method_name=active_method
+        )
+        comp_path = out_dir / f"{stem}_{args.method.replace('+', 'p')}_composite.png"
+        render_composite_figure(
+            rgb_img=rgb_img, probs=probs, cams=cams, thresholds=thresholds,
+            meta=cam_meta, out_path=comp_path, method_title=active_method
+        )
+
+    print("\n--- Finished successfully! ---")
 
 
 if __name__ == "__main__":
     main()
+

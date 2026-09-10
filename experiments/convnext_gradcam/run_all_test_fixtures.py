@@ -56,29 +56,51 @@ def run_batch():
             input_tensor=tensor,
             target_layer_name="stages.3",
             device=device,
+            method="both",
         )
 
         stem = img_path.stem
         out_dir = OUTPUT_BASE / stem
-        cond_paths = save_per_condition_overlays(
+        cams_v = cams["gradcam"]
+        cams_pp = cams["gradcam++"]
+
+        # 1. Save Grad-CAM++ condition overlays
+        cond_paths_pp = save_per_condition_overlays(
             rgb_img=rgb_img,
             probs=probs,
-            cams=cams,
+            cams=cams_pp,
             thresholds=thresholds,
             meta=cam_meta,
             out_dir=out_dir,
             image_stem=stem,
+            method_name="Grad-CAM++",
         )
 
-        comp_path = out_dir / f"{stem}_gradcam_composite.png"
+        # 2. Save Grad-CAM++ composite figure
+        comp_pp_path = out_dir / f"{stem}_gradcampp_composite.png"
         render_composite_figure(
             rgb_img=rgb_img,
             probs=probs,
-            cams=cams,
+            cams=cams_pp,
             thresholds=thresholds,
             meta=cam_meta,
-            out_path=comp_path,
+            out_path=comp_pp_path,
+            method_title="Grad-CAM++",
         )
+
+        # 3. Save side-by-side comparison figure
+        comp_vs_path = out_dir / f"{stem}_gradcam_vs_gradcampp.png"
+        from gradcam_convnext import render_comparison_figure
+        render_comparison_figure(
+            rgb_img=rgb_img,
+            probs=probs,
+            cams_vanilla=cams_v,
+            cams_plusplus=cams_pp,
+            thresholds=thresholds,
+            meta=cam_meta,
+            out_path=comp_vs_path,
+        )
+
 
         print("\nPredictions:")
         for i, label in enumerate(LABELS):
@@ -88,16 +110,19 @@ def run_batch():
             print(f"  {label:<8}: prob = {p:.4f} vs threshold = {th:.2f} {flag}")
 
         print("\nSaved Result Images:")
-        for label, path in cond_paths.items():
+        for label, path in cond_paths_pp.items():
             print(f"  {label:<8}: {path.resolve()}")
-        print(f"  Composite: {comp_path.resolve()}")
+        print(f"  Grad-CAM++ Composite : {comp_pp_path.resolve()}")
+        print(f"  Side-by-Side Figure   : {comp_vs_path.resolve()}")
 
         all_results[filename] = {
             "probs": {label: float(probs[i]) for i, label in enumerate(LABELS)},
             "thresholds": {label: float(thresholds[i]) for i, label in enumerate(LABELS)},
-            "paths": {label: str(p.resolve()) for label, p in cond_paths.items()},
-            "composite": str(comp_path.resolve()),
+            "paths": {label: str(p.resolve()) for label, p in cond_paths_pp.items()},
+            "composite_pp": str(comp_pp_path.resolve()),
+            "comparison": str(comp_vs_path.resolve()),
         }
+
 
     print("\n\nAll test runs finished successfully!")
     return all_results
