@@ -28,6 +28,8 @@ MARKER_LAYOUT = "PATCHED-LAYOUT by image_pipeline/patch_kit.py"
 MARKER_PAPER = "PATCHED-PAPER by image_pipeline/patch_kit.py"
 MARKER_NP2 = "PATCHED-NUMPY2 by image_pipeline/patch_kit.py"
 MARKER_LAZY = "PATCHED-LAZYDEPS by image_pipeline/patch_kit.py"
+MARKER_HELPER = "PATCHED-UNUSED-IMGAUG by image_pipeline/patch_kit.py"
+MARKER_FONT = "PATCHED-FIXEDFONT by image_pipeline/patch_kit.py"
 
 HEADER_X = 1.6      # plot units right of the left edge
 HEADER_Y = 1.1      # plot units down from the top edge
@@ -328,6 +330,31 @@ LAZY_PATCH = (
 )
 
 
+# helper_functions imports imgaug but never references it.  Keeping that dead
+# import forces an abandoned NumPy-1-era package into every render process and
+# is the only reason the FCMAE path needed imgaug at all.  Removing it lets the
+# renderer use Colab's native, internally consistent NumPy/SciPy wheels.
+UNUSED_IMGAUG_PATCH = (
+    "from imgaug import augmenters as iaa",
+    "# " + MARKER_HELPER + ": unused import removed",
+)
+
+
+# ---------------------------------------------------------------- fixed font
+# Upstream chooses a random font for every record even when every augmentation
+# flag is disabled. FCMAE pretraining needs exactly one image per ECG and the
+# only permitted visual variation is grid colour, so let callers pin the font
+# without changing the behaviour of existing builds that leave the variable
+# unset.
+FIXED_FONT_PATCH = (
+    "        font = os.path.join('Fonts',random.choice(os.listdir(\"Fonts\")))",
+    "        # " + MARKER_FONT + ": optional deterministic typeface.\n"
+    "        _fixed_font = os.environ.get('ECG_FIXED_FONT', '').strip()\n"
+    "        font = os.path.join('Fonts', _fixed_font) if _fixed_font else \\\n"
+    "            os.path.join('Fonts', random.choice(os.listdir(\"Fonts\")))",
+)
+
+
 def patch_file(path, old: str, new: str, marker: str = MARKER) -> str:
     """Replace `old` with `new`, ignoring trailing whitespace differences.
 
@@ -377,8 +404,12 @@ def is_patched() -> bool:
     entry = C.KIT / "gen_ecg_images_from_data_batch.py"
     if not entry.exists() or MARKER_NP2 not in entry.read_text():
         return False
+    helper = C.KIT / "helper_functions.py"
+    if not helper.exists() or MARKER_HELPER not in helper.read_text():
+        return False
     single = C.KIT / "gen_ecg_image_from_data.py"
-    if not single.exists() or MARKER_LAZY not in single.read_text():
+    if (not single.exists() or MARKER_LAZY not in single.read_text()
+            or MARKER_FONT not in single.read_text()):
         return False
     return all(m in text for m in (MARKER, MARKER_LEAD, MARKER_RHYTHM,
                                    MARKER_INK, MARKER_LAYOUT, MARKER_PAPER))
@@ -460,12 +491,27 @@ def main() -> int:
     else:
         print(f"missing {entry}", file=sys.stderr); failed = True
 
+    # --- remove helper_functions' dead imgaug import --------------------
+    helper = C.KIT / "helper_functions.py"
+    if helper.exists():
+        old, new = UNUSED_IMGAUG_PATCH
+        status = patch_file(helper, old, new, MARKER_HELPER)
+        print(f"{helper.name}: unused imgaug {status}")
+        failed |= status.startswith("FAILED")
+    else:
+        print(f"missing {helper}", file=sys.stderr); failed = True
+
     # --- make the unused heavy helpers lazy ------------------------------
     single = C.KIT / "gen_ecg_image_from_data.py"
     if single.exists():
         old, new = LAZY_PATCH
         status = patch_file(single, old, new, MARKER_LAZY)
         print(f"{single.name}: lazy deps  {status}")
+        failed |= status.startswith("FAILED")
+
+        old, new = FIXED_FONT_PATCH
+        status = patch_file(single, old, new, MARKER_FONT)
+        print(f"{single.name}: fixed font {status}")
         failed |= status.startswith("FAILED")
     else:
         print(f"missing {single}", file=sys.stderr); failed = True

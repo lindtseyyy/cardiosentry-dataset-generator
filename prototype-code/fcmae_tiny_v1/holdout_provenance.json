@@ -1,0 +1,11 @@
+{
+  "source": "dataset-combination-code/ecg_dataset_pipeline/data/releases/v2/harmonized/harmonized_ecg_metadata.csv",
+  "source_sha256": "a0fb2c669780f4a426ccbc4cb924c9d9ae9587024fbf499c39983c09d3be4bc0",
+  "holdout_records": 3925,
+  "counts": {
+    "ptb-xl": 2784,
+    "chapman_shaoxing_ningbo": 851,
+    "STEMI": 290
+  },
+  "limitation": "Only established source namespaces are matched. Unknown and cross-source patient linkage remains unavailable."
+}
