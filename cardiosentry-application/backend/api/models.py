@@ -19,8 +19,10 @@ def list_models(request: Request):
             "display_name": d.display_name,
             "version": d.version,
             "notes": d.notes,
-            "labels": d.labels,
-            "display_names": d.display_names,
+            "labels": d.served_labels,
+            "model_labels": d.labels,
+            "display_names": d.served_display_names,
+            "suppressed_labels": d.output.suppressed_labels,
             "views": [list(v) for v in (d.architecture.view_sizes or [])],
             "call_style": d.architecture.call_style,
             "input_size": list(d.preprocess.input_hw),      # [height, width]

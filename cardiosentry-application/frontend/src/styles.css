@@ -171,6 +171,27 @@ textarea {
   gap: 8px;
   color: var(--text);
 }
+.brand-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.brand-link {
+  min-height: 44px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+.brand-link:hover {
+  background: transparent;
+  color: var(--accent);
+}
+.brand-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
 .dot {
   width: 10px;
   height: 10px;
@@ -484,6 +505,50 @@ textarea {
 }
 
 /* ------------------------------------------------------------ score rows */
+.prediction-labels {
+  margin: 18px 0;
+}
+.label-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.label-section-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--positive-bg);
+  color: var(--positive-fg);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.negative-labels {
+  border-top: 1px solid var(--border);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+.negative-labels summary,
+.compact-details > summary {
+  color: var(--text-muted);
+  cursor: pointer;
+  font-weight: 600;
+  list-style-position: inside;
+}
+.negative-list {
+  margin-top: 12px;
+}
+.negative-list .score-row:last-child {
+  margin-bottom: 0;
+}
 .score-row {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -491,8 +556,11 @@ textarea {
   margin-bottom: 12px;
   background: var(--panel-2);
 }
-.score-row.blind {
-  opacity: 0.75;
+.score-row.positive {
+  border-color: var(--indigo);
+}
+.score-row.negative {
+  background: var(--panel);
 }
 .score-head {
   display: flex;
@@ -530,93 +598,6 @@ textarea {
   bottom: 0;
   background: var(--bar-fill);
   border-radius: 999px;
-}
-.score-bar-tick {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 3px;
-  background: var(--bar-tick);
-  border-radius: 2px;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
-}
-.score-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-top: 6px;
-  font-family: var(--font-mono);
-}
-
-/* threshold slider */
-.threshold-slider {
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.threshold-slider input[type="range"] {
-  flex: 1;
-  accent-color: var(--accent);
-  min-height: 32px;
-}
-.threshold-slider .val {
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  color: var(--accent);
-  min-width: 3.6em;
-  text-align: right;
-}
-.threshold-source {
-  font-size: 0.75rem;
-  color: var(--text-faint);
-}
-
-/* --------------------------------------------------------- quality banner */
-.quality-banner {
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  margin-bottom: 14px;
-  border: 1px solid;
-}
-.quality-banner.ok {
-  background: #12271e;
-  border-color: #2a5c45;
-  color: #b9f4dd;
-}
-.quality-banner.warn {
-  background: #3a2f12;
-  border-color: #7a6520;
-  color: #ffe9a8;
-}
-.quality-banner.poor {
-  background: #3a1f24;
-  border-color: #6e323b;
-  color: #ffd7dd;
-}
-.quality-banner .q-title {
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-.quality-banner .q-flags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.quality-banner .q-flag {
-  border-radius: 999px;
-  padding: 2px 10px;
-  font-size: 0.78rem;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-.quality-banner .q-flag.poor {
-  background: rgba(248, 113, 113, 0.18);
-  border-color: rgba(248, 113, 113, 0.4);
-  color: #ffd7dd;
 }
 
 /* ------------------------------------------------------------- quad editor */
@@ -812,22 +793,6 @@ textarea {
   font-size: 0.8rem;
   margin-top: 2px;
 }
-.quality-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.quality-dot.ok {
-  background: var(--ok);
-}
-.quality-dot.warn {
-  background: var(--warn);
-}
-.quality-dot.poor {
-  background: var(--poor);
-}
-
 /* ------------------------------------------------------------- detail info */
 .kv-grid {
   display: grid;
@@ -904,6 +869,26 @@ textarea {
   font-weight: 700;
   margin: 0 0 4px;
 }
+.page-heading {
+  margin-bottom: 18px;
+}
+.model-name,
+.capture-id {
+  font-size: 0.82rem;
+}
+.capture-id {
+  color: var(--text-muted);
+  margin: 4px 0 16px;
+}
+.compact-copy {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+.compact-details .kv-grid + .kv-grid {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
 .section-sub {
   color: var(--text-muted);
   font-size: 0.9rem;
@@ -942,87 +927,10 @@ textarea {
   color: var(--text-muted);
 }
 
-/* ------------------------------------------------------- explainability (XAI)
- *
- * Two colour encodings, and they must never be confused:
- *   sequential  Grad-CAM and the Jacobian — magnitude only, "less -> more".
- *   diverging   Integrated Gradients — signed, blue lowered the score, red
- *               raised it, and TRANSPARENT is zero rather than a colour.
- * The legend and the coupling table reuse the same two ramps so the pictures
- * and the numbers read as one system.
- */
-.explain-panel .method-tabs {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: 10px 0 6px;
+/* --------------------------------------------------------------- Grad-CAM */
+.explain-title {
+  margin-bottom: 4px;
 }
-.method-tab {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-.method-tab.active {
-  background: var(--panel-3);
-  border-color: var(--accent);
-  color: var(--text);
-}
-.method-blurb {
-  min-height: 2.4em;             /* the tabs must not jump as blurbs change */
-  margin: 0 0 12px;
-}
-
-.explain-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.control-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.control-row .control-label {
-  min-width: 68px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-.control-row input[type="range"] {
-  flex: 1 1 160px;
-  min-width: 120px;
-}
-.control-row .val {
-  font-family: var(--font-mono);
-  min-width: 3ch;
-}
-.chip-row {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.chip.toggle {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.chip.toggle.on {
-  background: var(--positive-bg);
-  border-color: var(--indigo);
-  color: var(--positive-fg);
-}
-.cost-line {
-  margin: 8px 0 0;
-  font-size: 0.82rem;
-}
-
 .run-list {
   display: flex;
   gap: 6px;
@@ -1075,31 +983,6 @@ textarea {
   margin-bottom: 10px;
 }
 
-.legend {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-}
-.legend .bar {
-  flex: 1 1 auto;
-  height: 8px;
-  border-radius: 4px;
-  max-width: 220px;
-}
-/* Matches cv2 COLORMAP_TURBO closely enough to read as the same ramp. */
-.legend.sequential .bar {
-  background: linear-gradient(
-    90deg, #30123b, #4662d7, #35abf8, #1ae4b6, #a4fc3b, #faba39, #e4460a, #7a0403
-  );
-}
-/* The diverging LUT in explain.py: blue -> white -> red. */
-.legend.diverging .bar {
-  background: linear-gradient(90deg, #0000ff, #ffffff, #ff0000);
-}
-
 .attr-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -1126,77 +1009,9 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 .attr-name {
   font-weight: 600;
   font-size: 0.9rem;
-}
-.attr-badges {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-.badge {
-  font-size: 0.7rem;
-  font-family: var(--font-mono);
-  padding: 2px 7px;
-  border-radius: 5px;
-  background: var(--panel-3);
-  color: var(--text-muted);
-  border: 1px solid transparent;
-  cursor: help;
-}
-.badge.ok {
-  color: var(--ok);
-}
-.badge.warn {
-  color: var(--warn);
-  border-color: var(--warn);
-}
-/* The header-leak badge. Loud on purpose: a map that looks convincing and
- * lands on the printed record ID is the failure this feature exists to find. */
-.badge.danger {
-  color: var(--poor);
-  border-color: var(--poor);
-  background: rgba(248, 113, 113, 0.12);
-  font-weight: 700;
-}
-
-.coupling {
-  margin-top: 18px;
-}
-.coupling h3 {
-  font-size: 0.95rem;
-  margin: 0 0 4px;
-}
-.table-scroll {
-  overflow-x: auto;
-}
-.coupling-table {
-  border-collapse: collapse;
-  font-size: 0.8rem;
-  margin-top: 8px;
-}
-.coupling-table th,
-.coupling-table td {
-  border: 1px solid var(--border);
-  padding: 5px 10px;
-  text-align: center;
-}
-.coupling-table th {
-  color: var(--text-muted);
-  font-weight: 600;
-  background: var(--panel-2);
-}
-
-.caveats {
-  margin: 16px 0 0;
-  padding-left: 18px;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-.caveats li + li {
-  margin-top: 6px;
 }

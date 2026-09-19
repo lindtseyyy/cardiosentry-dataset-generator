@@ -97,6 +97,19 @@ class ThresholdSpec(BaseModel):
     explicit: list[float] | None = None        # only used when source == explicit
 
 
+class OutputSpec(BaseModel):
+    """Serving policy for a model whose checkpoint head must stay intact.
+
+    A suppressed label is still present in ``ModelDescriptor.labels`` because
+    that list is the checkpoint's immutable logit order.  It is omitted from
+    API/UI scores, thresholds, positives and explainability until the label is
+    removed from this list.  This makes a temporary product decision reversible
+    without editing weights or lying about the head that was loaded.
+    """
+    suppressed_labels: list[str] = Field(default_factory=list)
+    reason: str = ""
+
+
 class ExplainSpec(BaseModel):
     """Explainability defaults for this checkpoint (backend/services/explain.py).
 
@@ -182,10 +195,21 @@ class ModelDescriptor(BaseModel):
     labels: list[str]
     display_names: dict[str, str] = Field(default_factory=dict)
     thresholds: ThresholdSpec = Field(default_factory=ThresholdSpec)
+    output: OutputSpec = Field(default_factory=OutputSpec)
     preprocess: PreprocessSpec = Field(default_factory=PreprocessSpec)
     runtime: RuntimeSpec = Field(default_factory=RuntimeSpec)
     explain: ExplainSpec = Field(default_factory=ExplainSpec)
     verify: VerifySpec = Field(default_factory=VerifySpec)
+
+    @property
+    def served_labels(self) -> list[str]:
+        """Labels exposed by the API, preserving checkpoint head order."""
+        suppressed = set(self.output.suppressed_labels)
+        return [label for label in self.labels if label not in suppressed]
+
+    @property
+    def served_display_names(self) -> dict[str, str]:
+        return {label: self.display_names[label] for label in self.served_labels}
 
     @model_validator(mode="after")
     def _check(self):
@@ -194,6 +218,17 @@ class ModelDescriptor(BaseModel):
         for l in self.labels:
             if l not in self.display_names:
                 self.display_names[l] = l
+        if len(self.output.suppressed_labels) != len(set(self.output.suppressed_labels)):
+            raise ValueError("output.suppressed_labels must be unique")
+        unknown_suppressed = [
+            label for label in self.output.suppressed_labels if label not in self.labels
+        ]
+        if unknown_suppressed:
+            raise ValueError(
+                "output.suppressed_labels must name checkpoint labels; unknown: "
+                + ", ".join(unknown_suppressed))
+        if not self.served_labels:
+            raise ValueError("output.suppressed_labels cannot suppress every label")
         if self.thresholds.source == "explicit":
             if not self.thresholds.explicit:
                 raise ValueError("thresholds.source=explicit requires thresholds.explicit")

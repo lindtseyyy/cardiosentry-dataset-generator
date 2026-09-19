@@ -9,6 +9,7 @@ subpackages are pinned copies of that code.
 
 | Package | Copied from | Serves |
 |---|---|---|
+| `convnextv2_v1img/` | factory in `prototype-code/convnextv2_tiny_v1img_v1/make_notebook.py` | V1 clean-image `convnextv2_tiny.fcmae_ft_in22k_in1k_384`: bare timm module, 12 logits, `drop_path_rate=0.2`, plain-tensor forward |
 | `hybrids_v2/` | `prototype-code/cardiosentry_hybrids_v2/{config,dimensions,hybrids,models}.py` | round-3 geometry-study checkpoints (`resnet50_cbam`, `efficientnetv2_s_cbam`, …), the ones trained on a RECTANGLE. Forward signature: **plain tensor**. `REGISTRY` and `build()` live in `models.py` |
 | `hybrids_v1/` | `prototype-code/cardiosentry_hybrids_v1/{config,hybrids}.py` | round-2 hybrid checkpoints (`resnet50_hires`, `resnet50_dual`, …). Forward signature: **dict** `{768: tensor}` |
 | `baselines_v2/` | `prototype-code/cardiosentry_baselines_v2/models.py` + the `{config,dimensions}.py` the two v2 packages share | round-3 **plain baselines** (`efficientnetv2_s`, `resnet50`, …) — the unmodified backbones the hybrids are measured against. `build()` is a bare `timm.create_model(tag, num_classes=4)` with no wrapper, so the checkpoints are bare timm state_dicts (`conv_stem…classifier`). Forward signature: **plain tensor**. `REGISTRY` and `build()` live in `models.py` |
@@ -16,7 +17,8 @@ subpackages are pinned copies of that code.
 
 Source repository: `CardioSentry` (commit `9c19a22`, first commit).
 `hybrids_v1/` and `runs_v1/` vendored on 2026-08-23, `hybrids_v2/` on
-2026-08-27, `baselines_v2/` on 2026-08-29. `baselines_v2/config.py` and
+2026-08-27, `baselines_v2/` on 2026-08-29, and `convnextv2_v1img/` on
+2026-09-19. `baselines_v2/config.py` and
 `baselines_v2/dimensions.py` are byte-identical to the `hybrids_v2/` copies —
 the two research packages share those files verbatim — and are duplicated
 rather than cross-imported so each package stays pinned on its own: a future
@@ -45,3 +47,9 @@ needs its own vendored package, not an env var.
 
 Everything else is byte-for-byte identical to the source files, including the
 `REGISTRY` tables, the `build()` factories, and all default hyperparameters.
+
+**3. ConvNeXt-V2 factory extraction.** The V1 training source is a generated
+notebook rather than a Python architecture package. `convnextv2_v1img/models.py`
+extracts its `build_model` call verbatim in behavior: the same timm tag,
+`num_classes=12`, and `drop_path_rate=0.2`. It deliberately omits training-only
+optimizer, loss, data-loader, and S3 code.

@@ -5,7 +5,7 @@ smartphone photograph of a real printed 12-lead ECG sheet into the CardioSentry
 image-space multi-label classifier through a preprocessing chain that
 **byte-for-byte mirrors the training pipeline**, and records everything about
 how that happened — original, detected quad, corrected sheet, exact model
-input, all four sigmoid scores, thresholds, timing, versions.
+input, the model's served sigmoid scores, thresholds, timing, and versions.
 
 It answers one question: *what does the model do when the input is a real
 photograph instead of a synthetic render?* Everything else follows from that.
@@ -20,6 +20,7 @@ cd cardiosentry-application
 ../.venv/bin/pip install -e .[dev]
 
 # 2. weights (gitignored training artifacts — copy from the research tree)
+cp ../prototype-results/NEW_convnext_v2_tiny_V1/best.pt models/weights/convnextv2_tiny_v1img_v1.pt
 cp ../prototype-results/hybrid_v1/resnet50_hires/weights/best.pt models/weights/resnet50_hires.pt
 cp ../prototype-results/hybrid_v1/resnet50_dual/weights/best.pt  models/weights/resnet50_dual.pt
 cp ../prototype-results/v1/resnet50/weights/best.pt              models/weights/resnet50_v1.pt
@@ -74,7 +75,7 @@ came from, so a map and a score always describe the same pixels:
 
 | method | what it answers | resolution | cost (CPU, 768×1024) |
 |---|---|---|---|
-| **Grad-CAM** | which *region* of the sheet | the 24×32 feature grid (~32 px cells) — a lead, not a segment | ~3 s, **+61 MB**, all four labels |
+| **Grad-CAM** | which *region* of the sheet | the final feature grid — a lead, not a segment | one forward plus a partial backward per served label |
 | **Integrated Gradients** | which *pixels*, and in which direction | per-pixel, signed (red raised the score, blue lowered it) | ~13 s × `steps`, **per label** |
 | **Jacobian** | how the whole *head* behaves | per-pixel per label, plus a label-coupling matrix | ~8 s **+2.5 GB**, or ~15 s +0.5 GB checkpointed |
 
@@ -154,12 +155,13 @@ photograph** can be re-scored by a different `.pt` with a bit-identical input:
 - **The model is data, not code.** One `.pt` + one YAML descriptor
   (`models/*.yaml`); architectures are vendored verbatim under `backend/arch/`
   with provenance. `verify_model.py` catches timm/weights drift.
-- **Per-class thresholds come from the checkpoint** (`[0.54, 0.21, 0.69, 0.86]`
-  for the active `efficientnetv2_s_nat768`); a silent 0.5 default is refused at
-  startup.
-- **Four independent sigmoid heads**, displayed in fixed order, never argmax,
-  never sorted by score; `NORMAL` + pathology contradictions are displayed,
-  not resolved. The UI says "Model score", never a probability of disease.
+- **Per-class thresholds are frozen training artifacts**, read from the
+  checkpoint or written explicitly in its descriptor; a silent 0.5 default is
+  refused at startup.
+- **Independent sigmoid heads**, displayed in checkpoint order, never argmax
+  and never sorted by score. A descriptor may temporarily suppress selected
+  heads at the serving boundary without changing the checkpoint; the UI says
+  "Model score", never a probability of disease.
 - **Warn, never block** on image quality: a rejected photo is a missing data
   point.
 - **Blind mode + reference labels** (§17.6): the app records what the ECG
@@ -170,7 +172,8 @@ photograph** can be re-scored by a different `.pt` with a bit-identical input:
 
 | id | checkpoint | input (h×w) | call style | purpose |
 |---|---|---|---|---|
-| `efficientnetv2_s_nat768` *(active)* | baselines_v2 | 768×1024 | `tensor` | round-3 **plain baseline** — the unmodified backbone at the sheet's native aspect. Val macro-AUPRC 0.9501; the default serving model |
+| `convnextv2_tiny_v1img_v1` *(active)* | convnextv2_v1img | 768×1024 | `tensor` | ConvNeXt-V2 Tiny trained on the clean-only V1 image corpus. Twelve checkpoint heads; nine currently served, with TInv, LQT, and PRWP suppressed reversibly |
+| `efficientnetv2_s_nat768` | baselines_v2 | 768×1024 | `tensor` | round-3 **plain baseline** — the unmodified backbone at the sheet's native aspect. Val macro-AUPRC 0.9501 |
 | `efficientnetv2_s_cbam_nat768` | hybrids_v2 | 768×1024 | `tensor` | same backbone and geometry, plus CBAM (0.9571) |
 | `resnet50_cbam_nat768` | hybrids_v2 | 768×1024 | `tensor` | same protocol, geometry and attention block, other backbone (0.9570) |
 | `resnet50_hires` | hybrid_v1 | 768×768 | `view_dict` | round-2 control |
@@ -181,22 +184,20 @@ The active model is a **rectangle at the sheet's own aspect**, not a square: the
 768×768 geometry squeezed the time axis by 22% and spent ~27% of the vertical
 budget on blank paper.
 
-The three round-3 descriptors share a protocol fingerprint
-(`36988c5e0ba5d72d`) and a geometry, so they are directly comparable. The
-active one is the **plain baseline**: no attention block, no fusion, just
-`tf_efficientnetv2_s.in1k` with a 4-logit head. It is also the weakest of the
-three by macro-AUPRC — 0.9501, against 0.9571 for the same backbone with CBAM
-and 0.9570 for ResNet-50+CBAM — and the gap is wider on the label that matters
-most here (val STEMI AUPRC 0.9513, sensitivity 0.8889, against 0.9701 / 0.9236
-for `resnet50_cbam_nat768`). Serving it is a deliberate choice of the
-unmodified reference over the better scores; if that was not the intent, swap
-with `CARDIOSENTRY_ACTIVE_MODEL=resnet50_cbam_nat768` or by repointing
-`models/active.yaml`.
+The active checkpoint has twelve logits in this immutable order: `NORM`, `AF`,
+`IAVB`, `LBBB`, `RBBB`, `PAC`, `PVC`, `LAFB`, `LAE`, `TInv`, `LQT`, `PRWP`.
+The application currently withholds `TInv`, `LQT`, and `PRWP` from scores,
+thresholds, positives, reference labels, and explanations through the model
+descriptor's `output.suppressed_labels`. The model weights and head order are
+unchanged; removing a label from that list and restarting returns it for future
+runs without retraining.
 
-One train/serve difference is deliberate and worth stating in any writeup: the
-round-3 training corpus had the printed ID/Age/Sex block painted out, and **the
-app does not redact uploaded photographs** — an uploaded sheet reaches the model
-as photographed. See `models/README.md`.
+This V1 run used clean synthetic ECG images rather than real phone photographs,
+so its scores remain research outputs under the same real-photo calibration
+caveat as the earlier models. The three older round-3 descriptors still share
+protocol fingerprint `36988c5e0ba5d72d` and remain available for controlled
+comparison; their documented header-redaction gap is covered in
+`models/README.md`.
 
 ## Security & privacy (read before serving)
 

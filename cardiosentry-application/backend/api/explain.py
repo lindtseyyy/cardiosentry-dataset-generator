@@ -280,7 +280,7 @@ def _resolve_labels(lm, body: ExplainRequest, pred: dict | None) -> list[str]:
     what the model actually flagged, and to the top-scoring label when the model
     flagged nothing.
     """
-    all_labels = lm.descriptor.labels
+    all_labels = lm.descriptor.served_labels
     if body.labels is not None:
         unknown = [l for l in body.labels if l not in all_labels]
         if unknown:

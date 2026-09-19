@@ -9,14 +9,16 @@ changes.
 
 ```
 models/
-├── active.yaml -> efficientnetv2_s_nat768.yaml   # which model the app serves
-├── efficientnetv2_s_nat768.yaml           # round-3 PLAIN baseline, 768x1024 (default)
+├── active.yaml -> convnextv2_tiny_v1img_v1.yaml  # which model the app serves
+├── convnextv2_tiny_v1img_v1.yaml          # V1 clean-image model, 12 heads / 9 served
+├── efficientnetv2_s_nat768.yaml           # round-3 PLAIN baseline, 768x1024
 ├── efficientnetv2_s_cbam_nat768.yaml      # round-3, same geometry + CBAM
 ├── resnet50_cbam_nat768.yaml              # round-3, same geometry, other backbone
 ├── resnet50_hires.yaml                    # round-2 control, 768px square
 ├── resnet50_dual.yaml                     # round-2 dual-stream 384+768
 ├── resnet50_v1.yaml                       # round-1, 384px, tensor call style
 └── weights/
+    ├── convnextv2_tiny_v1img_v1.pt
     ├── efficientnetv2_s_nat768.pt
     ├── resnet50_cbam_nat768.pt
     ├── efficientnetv2_s_cbam_nat768.pt
@@ -30,6 +32,8 @@ models/
 The checkpoints are the training outputs in the research tree; copy them here:
 
 ```bash
+cp ../prototype-results/NEW_convnext_v2_tiny_V1/best.pt \
+   weights/convnextv2_tiny_v1img_v1.pt
 cp "../prototype-results/efficientnetv2_s@nat768/weights/best.pt" \
    weights/efficientnetv2_s_nat768.pt
 cp "../prototype-results/resnet50_cbam@nat768/weights/best.pt" \
@@ -62,8 +66,14 @@ example. Key fields:
   (`[[768, 1024]]`). `view_dict` keys its input dict by a single integer, so
   that call style accepts square views only — the schema refuses the
   combination rather than silently transposing something.
-- `labels` — MUST match the checkpoint's head order (`[STEMI, AF, LVH,
-  NORMAL]`, F1); `display_names` are the UI strings.
+- `labels` — MUST match the checkpoint's head order (the active V1 run uses
+  `[NORM, AF, IAVB, LBBB, RBBB, PAC, PVC, LAFB, LAE, TInv, LQT, PRWP]`);
+  `display_names` are the UI strings.
+- `output.suppressed_labels` — reversible serving-only suppression. These
+  labels remain in `labels`, the model still loads its complete head with
+  `strict=True`, and removing them from this list returns them in future API/UI
+  results. Suppressed labels do not appear in scores, thresholds, positives,
+  reference-label controls, or new explanations.
 - `thresholds.source` — `checkpoint` reads the frozen per-class thresholds
   from the `.pt` (default; startup refuses if absent); `explicit` takes the
   values from the descriptor.
@@ -117,13 +127,13 @@ layer `attn`) the two round-3 checkpoints do **not** behave the same there:
 
 | Grad-CAM header lift | STEMI | AF | LVH | NORMAL |
 |---|---|---|---|---|
-| `efficientnetv2_s_nat768` *(active)* | 0.78 | 0.42 | 0.52 | 1.11 |
+| `efficientnetv2_s_nat768` | 0.78 | 0.42 | 0.52 | 1.11 |
 | `efficientnetv2_s_cbam_nat768` | 1.64 | 0.50 | 1.86 | 1.62 |
 | `resnet50_cbam_nat768` | 0.005 | 0.003 | 0.034 | 0.000 |
 
 A lift of 1.0 is uniform attention, and the peak lands outside the box for
-every row here. The active plain baseline sits at or below uniform on three of
-four labels — better than its CBAM sibling, which puts ~1.6-1.9x uniform weight
+every row here. The plain baseline sits at or below uniform on three of four
+labels — better than its CBAM sibling, which puts ~1.6-1.9x uniform weight
 there — but nowhere near the two ResNet-50 rows, which are three orders of
 magnitude lower. Read that alongside the self-check: painting the training
 REDACT_BOX back on moves this checkpoint's AF score by 6.7e-3, against 1.2e-4
@@ -137,8 +147,9 @@ score anywhere.
 1. Copy the `.pt` into `weights/`.
 2. Write `models/<id>.yaml` (start from `resnet50_cbam_nat768.yaml`);
    fill `expected_sha256` with `sha256sum` of the file, and
-   `expected_protocol_fingerprint` from the blob's `protocol_fingerprint`
-   (or `fingerprint`, which is what round-1 and round-3 checkpoints store).
+   `expected_protocol_fingerprint` from the blob's `protocol_fingerprint`,
+   `fingerprint`, or `config_fingerprint` (the runner accepts those spellings
+   in that order because the training generations used all three).
 3. If the run used an architecture package that is not vendored yet, vendor it
    under `backend/arch/` first — see `backend/arch/README.md`.
 4. Point `active.yaml` at it (or set `CARDIOSENTRY_ACTIVE_MODEL=<id>`).
@@ -151,7 +162,9 @@ score anywhere.
    catch a transposed or wrong geometry, and a matching score vector will. If
    it fails, measure WHY before touching `verify.score_tolerance`: painting the
    training `REDACT_BOX` onto the fixture separates the documented header
-   train/serve gap from actual timm/weights drift.
+   train/serve gap from actual timm/weights drift. If the run never evaluated
+   this exact fixture, record a serving-path CPU vector and say so explicitly
+   in its `source` field; do not pretend it came from the training report.
 6. Sanity-check the Grad-CAM target with
    `curl localhost:8000/api/models/<id>/layers` — `auto_target_layer` should
    be the deepest feature map the head pools (`attn` on a CBAM hybrid,

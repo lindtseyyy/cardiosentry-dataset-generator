@@ -122,7 +122,9 @@ def load_model(ld: LoadedDescriptor) -> LoadedModel:
     fingerprint = None
     epoch = None
     if isinstance(blob, dict):
-        fingerprint = blob.get("protocol_fingerprint") or blob.get("fingerprint")
+        fingerprint = (blob.get("protocol_fingerprint")
+                       or blob.get("fingerprint")
+                       or blob.get("config_fingerprint"))
         epoch = blob.get("epoch")
     if desc.expected_protocol_fingerprint and fingerprint != desc.expected_protocol_fingerprint:
         raise ModelLoadError(
@@ -256,22 +258,31 @@ def predict(lm: LoadedModel, model_input_path: Path,
                        "the checkpoint's head.")
 
     scores = 1.0 / (1.0 + np.exp(-logits))    # torch.sigmoid on fp32 logits
+    served_labels = desc.served_labels
+    label_indexes = {label: i for i, label in enumerate(desc.labels)}
 
     if thresholds_override:
         threshold_source = "user_override"
-        thresholds = {l: float(thresholds_override[l]) for l in desc.labels}
+        thresholds = {l: float(thresholds_override[l]) for l in served_labels}
     elif desc.thresholds.source == "explicit":
         threshold_source = "descriptor"
-        thresholds = dict(zip(desc.labels, lm.thresholds))
+        thresholds = {
+            label: lm.thresholds[label_indexes[label]] for label in served_labels
+        }
     else:
         threshold_source = "checkpoint"
-        thresholds = dict(zip(desc.labels, lm.thresholds))
+        thresholds = {
+            label: lm.thresholds[label_indexes[label]] for label in served_labels
+        }
 
-    positive = [l for l in desc.labels if scores[desc.labels.index(l)] >= thresholds[l]]
+    positive = [
+        label for label in served_labels
+        if scores[label_indexes[label]] >= thresholds[label]
+    ]
 
     return PredictResult(
-        scores={l: float(scores[i]) for i, l in enumerate(desc.labels)},
-        logits={l: float(logits[i]) for i, l in enumerate(desc.labels)},
+        scores={label: float(scores[label_indexes[label]]) for label in served_labels},
+        logits={label: float(logits[label_indexes[label]]) for label in served_labels},
         thresholds=thresholds, threshold_source=threshold_source,
         positive=positive,
         timing_ms={"preprocess": round(prep_ms, 1),

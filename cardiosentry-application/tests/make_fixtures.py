@@ -34,8 +34,28 @@ CORPUS_SHEET = (REPO_ROOT / "dataset-combination-code/ecg_dataset_pipeline"
 # fallback for a descriptor that pins nothing — is a copy of the ACTIVE model's,
 # so regenerating fixtures can never leave the self-check comparing the served
 # model against another run's numbers.
-ACTIVE_MODEL = "efficientnetv2_s_nat768"
+ACTIVE_MODEL = "convnextv2_tiny_v1img_v1"
 EXPECTED_SCORES = {
+    "convnextv2_tiny_v1img_v1": {
+        "model": "convnextv2_tiny_v1img_v1",
+        "image": "corpus_sheet.jpg",
+        "source": ("CardioSentry serving path, CPU float32; no matching V1 "
+                   "evaluation image is available locally"),
+        "scores": {
+            "NORM": 0.0004257865366525948,
+            "AF": 0.9984742999076843,
+            "IAVB": 0.00034827488707378507,
+            "LBBB": 0.002829588484019041,
+            "RBBB": 0.000134890346089378,
+            "PAC": 0.0012787270825356245,
+            "PVC": 0.00010621726687531918,
+            "LAFB": 0.00169347261544317,
+            "LAE": 0.00009923530888045207,
+            "TInv": 0.11236025393009186,
+            "LQT": 0.000049815145757747814,
+            "PRWP": 0.00027405432774685323,
+        },
+    },
     "efficientnetv2_s_nat768": {
         "model": "efficientnetv2_s_nat768",
         "image": "ECG000002_a0.jpg",

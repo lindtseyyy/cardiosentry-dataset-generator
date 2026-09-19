@@ -3,10 +3,9 @@ import { api, friendlyMessage, isApiError } from "../api/client";
 import type { CaptureRecord, PredictionRecord } from "../api/types";
 import { useApp } from "../AppContext";
 import ExplainPanel from "../components/ExplainPanel";
-import ModelBadge, { formatInputSize } from "../components/ModelBadge";
-import QualityBanner from "../components/QualityBanner";
+import { formatInputSize } from "../components/ModelBadge";
+import PredictionLabels from "../components/PredictionLabels";
 import ReferenceLabels from "../components/ReferenceLabels";
-import ScoreBar from "../components/ScoreBar";
 import StageStrip from "../components/StageStrip";
 
 export interface CaptureDetailScreenProps {
@@ -18,45 +17,27 @@ export interface CaptureDetailScreenProps {
 function RunView({
   run,
   fallbackDisplayNames,
+  blind,
 }: {
   run: PredictionRecord;
   fallbackDisplayNames: Record<string, string>;
+  blind: boolean;
 }) {
-  const labels = run.descriptor_snapshot?.labels ?? Object.keys(run.scores);
+  const scoreLabels = Object.keys(run.scores);
+  const labels = (run.descriptor_snapshot?.labels ?? scoreLabels).filter(
+    (label) => label in run.scores
+  );
   const displayNames = run.descriptor_snapshot?.display_names ?? fallbackDisplayNames;
   return (
     <div className="panel">
-      <ModelBadge
-        id={run.model.id}
-        displayName={run.model.display_name}
-        version={run.model.version}
-        checkpointShort={run.model.checkpoint_sha256_short}
-        inputSize={run.model.input_size}
-        device={run.model.device}
+      <h2>{run.model.display_name}</h2>
+      <PredictionLabels
+        labels={labels}
+        displayNames={displayNames}
+        scores={run.scores}
+        positive={run.positive}
+        blind={blind}
       />
-      <div className="kv-grid" style={{ margin: "10px 0" }}>
-        <div className="k">Run</div>
-        <div className="v mono">{run.run_id}</div>
-        <div className="k">Threshold source</div>
-        <div className="v">{run.threshold_source}</div>
-        <div className="k">Preprocess</div>
-        <div className="v">{run.timing_ms.preprocess} ms</div>
-        <div className="k">Forward</div>
-        <div className="v">{run.timing_ms.forward} ms</div>
-        <div className="k">Input sha256</div>
-        <div className="v">{run.model_input_sha256}</div>
-      </div>
-      {labels.map((label) => (
-        <ScoreBar
-          key={label}
-          label={label}
-          displayName={displayNames[label] ?? label}
-          score={run.scores[label]}
-          threshold={run.thresholds[label]}
-          thresholdSource={run.threshold_source}
-          positive={run.positive.includes(label)}
-        />
-      ))}
     </div>
   );
 }
@@ -124,7 +105,7 @@ export default function CaptureDetailScreen({
     if (config?.active_model.labels?.length) return config.active_model.labels;
     const run = record?.prediction_runs?.[0];
     if (run?.descriptor_snapshot?.labels?.length)
-      return run.descriptor_snapshot.labels;
+      return run.descriptor_snapshot.labels.filter((label) => label in run.scores);
     return run ? Object.keys(run.scores) : [];
   }, [config, record]);
 
@@ -202,43 +183,25 @@ export default function CaptureDetailScreen({
           ← History
         </button>
       </div>
-      <p className="section-sub mono">{captureId}</p>
+      <p className="capture-id mono">{captureId}</p>
 
       {error ? <div className="msg error">{error}</div> : null}
       {deleteError ? <div className="msg error">{deleteError}</div> : null}
 
       <div className="panel">
-        <h2>Pipeline stages</h2>
+        <h2>Images</h2>
         <StageStrip stages={stages} />
       </div>
 
-      <h2 style={{ margin: "0 0 10px" }}>Quality</h2>
-      <QualityBanner quality={record.quality_original} />
-      <QualityBanner quality={record.quality_model_input} />
-
-      <div className="panel">
-        <h2>Detection</h2>
-        <div className="kv-grid">
-          <div className="k">Method</div>
+      <details className="panel compact-details">
+        <summary>Processing details</summary>
+        <div className="kv-grid mt">
+          <div className="k">Detection</div>
           <div className="v">{record.detection?.method ?? "—"}</div>
           <div className="k">Confidence</div>
-          <div className="v">
-            {record.detection?.confidence == null
-              ? "—"
-              : record.detection.confidence}
-          </div>
-          <div className="k">Area fraction</div>
-          <div className="v">
-            {record.detection?.area_fraction ?? "—"}
-          </div>
-          <div className="k">Aspect ratio</div>
-          <div className="v">{record.detection?.aspect_ratio ?? "—"}</div>
+          <div className="v">{record.detection?.confidence ?? "—"}</div>
         </div>
-      </div>
-
-      {record.correction ? (
-        <div className="panel">
-          <h2>Correction</h2>
+        {record.correction ? (
           <div className="kv-grid">
             <div className="k">Geometry mode</div>
             <div className="v">{record.correction.geometry_mode}</div>
@@ -253,12 +216,8 @@ export default function CaptureDetailScreen({
               {record.correction.corners_manually_adjusted ? "yes" : "no"}
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {record.preprocess ? (
-        <div className="panel">
-          <h2>Preprocess</h2>
+        ) : null}
+        {record.preprocess ? (
           <div className="kv-grid">
             <div className="k">Input size</div>
             <div className="v">
@@ -271,11 +230,12 @@ export default function CaptureDetailScreen({
             <div className="k">Tensor sha256</div>
             <div className="v">{String(record.preprocess.tensor_sha256 ?? "—")}</div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </details>
 
-      <div className="panel">
-        <h2>Run another model</h2>
+      <details className="panel compact-details">
+        <summary>Run another model</summary>
+        <div className="mt">
         {availableModels.length ? (
           <>
             <div className="field">
@@ -311,7 +271,8 @@ export default function CaptureDetailScreen({
         ) : (
           <p className="muted">All discovered models have been run on this capture.</p>
         )}
-      </div>
+        </div>
+      </details>
 
       <h2 style={{ margin: "0 0 10px" }}>
         Prediction runs ({record.prediction_runs?.length ?? 0})
@@ -324,6 +285,9 @@ export default function CaptureDetailScreen({
             key={run.run_id}
             run={run}
             fallbackDisplayNames={configDisplayNames}
+            blind={
+              !!record.session?.blind_mode && !record.annotation?.labels_entered_utc
+            }
           />
         ))
       )}
@@ -339,16 +303,19 @@ export default function CaptureDetailScreen({
         />
       ) : null}
 
-      <div className="mt-lg">
-        <ReferenceLabels
-          captureId={captureId}
-          labels={annotationLabels}
-          displayNames={configDisplayNames}
-          annotation={record.annotation}
-          blindMode={!!record.session?.blind_mode}
-          onSaved={(r) => setRecord(r)}
-        />
-      </div>
+      <details className="compact-details mt-lg">
+        <summary>Reference labels</summary>
+        <div className="mt">
+          <ReferenceLabels
+            captureId={captureId}
+            labels={annotationLabels}
+            displayNames={configDisplayNames}
+            annotation={record.annotation}
+            blindMode={!!record.session?.blind_mode}
+            onSaved={(r) => setRecord(r)}
+          />
+        </div>
+      </details>
 
       <details className="panel">
         <summary>Raw capture.json</summary>

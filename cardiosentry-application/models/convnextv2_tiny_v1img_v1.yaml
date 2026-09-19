@@ -1,0 +1,72 @@
+schema_version: 1
+
+id: convnextv2_tiny_v1img_v1
+display_name: "CardioSentry ConvNeXt-V2 Tiny V1 @768x1024"
+version: convnextv2_tiny_v1img_clean_seed42
+notes: "Best epoch 16 from NEW_convnext_v2_tiny_V1. Trained on the clean-only
+        CardioSentry V1 ECG-image corpus with 12 independent sigmoid heads.
+        PRWP, TInv, and LQT remain in the immutable checkpoint head but are
+        temporarily suppressed at the serving boundary. Remove them from
+        output.suppressed_labels to return them in future predictions."
+
+weights: weights/convnextv2_tiny_v1img_v1.pt
+expected_sha256: 9ff1aa11c703a06339742fa702bf12cbd64fce189732056da7368e827e3115ef
+expected_protocol_fingerprint: 3282ccffda67cea7
+
+architecture:
+  module: arch.convnextv2_v1img
+  registry_key: convnextv2_tiny
+  pretrained: false
+  call_style: tensor
+  views: [[768, 1024]]
+
+labels: [NORM, AF, IAVB, LBBB, RBBB, PAC, PVC, LAFB, LAE, TInv, LQT, PRWP]
+display_names:
+  NORM: "Normal ECG"
+  AF: "Atrial Fibrillation"
+  IAVB: "First-Degree AV Block"
+  LBBB: "Left Bundle Branch Block"
+  RBBB: "Right Bundle Branch Block"
+  PAC: "Premature Atrial Contractions"
+  PVC: "Premature Ventricular Contractions"
+  LAFB: "Left Anterior Fascicular Block"
+  LAE: "Left Atrial Enlargement"
+  TInv: "T-Wave Inversion"
+  LQT: "Long QT"
+  PRWP: "Poor R-Wave Progression"
+
+thresholds:
+  source: explicit
+  explicit: [0.720703125, 0.791015625, 0.890625, 0.9462890625,
+             0.94140625, 0.83740234375, 0.94287109375, 0.48828125,
+             0.77880859375, 0.83935546875, 0.77783203125, 0.861328125]
+
+output:
+  suppressed_labels: [TInv, LQT, PRWP]
+  reason: "Temporarily withheld from application results by project decision; the checkpoint heads remain loaded."
+
+preprocess:
+  canvas: [1650, 1275]
+  margin_px: 18
+  input_size: [768, 1024]
+  resample: pil_bicubic
+  match_training_jpeg: false
+  jpeg_quality: 95
+  normalize:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+
+runtime:
+  device: cpu
+  dtype: float32
+  num_threads: null
+
+explain:
+  enabled: true
+  target_layer: stages.3
+  header_box: null
+  header_redacted_in_training: false
+
+verify:
+  expected_scores: tests/fixtures/expected_scores_convnextv2_tiny_v1img_v1.json
+  score_tolerance: 2.0e-3

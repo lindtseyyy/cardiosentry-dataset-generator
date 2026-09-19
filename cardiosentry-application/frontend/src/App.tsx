@@ -45,7 +45,7 @@ export default function App() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    // Config + health are critical (labels, thresholds, notice, status).
+    // Config + health are critical (labels, model status, and feature flags).
     try {
       const [c, h] = await Promise.all([api.getConfig(), api.getHealth()]);
       setConfig(c);
@@ -101,7 +101,6 @@ export default function App() {
               setUpload(resp);
               setScreen({ name: "corner" });
             }}
-            onHistory={goHistory}
           />
         );
       case "history":
@@ -139,7 +138,6 @@ export default function App() {
         return (
           <ResultScreen
             prediction={screen.prediction}
-            onPrediction={(p) => setScreen({ name: "result", prediction: p })}
             onNewCapture={goCapture}
             onHistory={goHistory}
             onOpenDetail={goDetail}
@@ -148,16 +146,19 @@ export default function App() {
     }
   }
 
-  const dotClass = !health ? "off" : health.model_loaded ? "" : "warn";
-
   return (
     <AppContext.Provider value={ctx}>
       <div className="app">
         <div className="topbar">
-          <span className="brand">
-            <span className={`dot${dotClass}`} />
+          <button
+            type="button"
+            className="brand brand-link"
+            onClick={goCapture}
+            aria-label="CardioSentry — New capture"
+          >
+            <img className="brand-logo" src="/favicon.png" alt="" />
             CardioSentry
-          </span>
+          </button>
           <nav className="hstack" style={{ gap: 8 }}>
             <button type="button" className="small ghost" onClick={goCapture}>
               New

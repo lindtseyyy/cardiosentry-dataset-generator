@@ -5,30 +5,17 @@ import { useApp } from "../AppContext";
 
 export interface CaptureScreenProps {
   onUploaded: (resp: CaptureUploadResponse) => void;
-  onHistory: () => void;
 }
 
-export default function CaptureScreen({
-  onUploaded,
-  onHistory,
-}: CaptureScreenProps) {
+export default function CaptureScreen({ onUploaded }: CaptureScreenProps) {
   const { config, health, loading } = useApp();
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
 
-  const [sheetId, setSheetId] = useState("");
-  const [notes, setNotes] = useState("");
-  const [retakeOf, setRetakeOf] = useState("");
-  const [blindMode, setBlindMode] = useState(false);
-
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-
-  const blindAvailable = config
-    ? config.capture.blind_mode_available !== false
-    : true;
 
   function handleFile(file: File | null, mode: "upload" | "camera") {
     if (!file || uploading) return;
@@ -37,10 +24,6 @@ export default function CaptureScreen({
     setProgress(0);
     uploadCapture({
       file,
-      sheetId: sheetId.trim() || undefined,
-      notes: notes.trim() || undefined,
-      retakeOf: retakeOf.trim() || undefined,
-      blindMode: blindMode && blindAvailable,
       mode,
       onProgress: (loaded, total) =>
         setProgress(total > 0 ? loaded / total : 0),
@@ -71,22 +54,14 @@ export default function CaptureScreen({
     return (
       <span className="status-badge ok">
         <span className={`dot${ok ? "" : " off"}`} />
-        <span>
-          {config.active_model.display_name}
-          <span className="mono"> · {config.active_model.checkpoint_sha256_short}</span>
-          <span className="muted"> · {health.device}</span>
-        </span>
+        <span>{config.active_model.display_name}</span>
       </span>
     );
   }
 
   return (
     <div>
-      <h1 className="section-title">Capture an ECG</h1>
-      <p className="section-sub">
-        Photograph a printed 12-lead ECG sheet. The app will find the paper
-        edges, then you can fine-tune the four corners.
-      </p>
+      <h1 className="section-title page-heading">New capture</h1>
 
       <div className="panel">
         <div className="spread">
@@ -148,66 +123,6 @@ export default function CaptureScreen({
 
       {error ? <div className="msg error mt">{error}</div> : null}
 
-      <div className="panel mt">
-        <h3>Capture details</h3>
-        <div className="vstack">
-          <div className="field">
-            <label htmlFor="sheet-id">Sheet ID</label>
-            <input
-              id="sheet-id"
-              type="text"
-              value={sheetId}
-              onChange={(e) => setSheetId(e.target.value)}
-              placeholder="Optional — e.g. patient/study code"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="retake-of">Retake of</label>
-            <input
-              id="retake-of"
-              type="text"
-              value={retakeOf}
-              onChange={(e) => setRetakeOf(e.target.value)}
-              placeholder="Optional — capture ID this replaces"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="notes">Notes</label>
-            <textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional — device, paper size, conditions…"
-            />
-          </div>
-
-          {blindAvailable ? (
-            <div className="toggle-row">
-              <div className="labels">
-                <span className="t">Blind mode</span>
-                <span className="d">
-                  Hide scores until you enter reference labels first.
-                </span>
-              </div>
-              <span className="switch">
-                <input
-                  type="checkbox"
-                  id="blind-mode"
-                  checked={blindMode}
-                  onChange={(e) => setBlindMode(e.target.checked)}
-                />
-                <span className="track" />
-              </span>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="footer-nav">
-        <button type="button" className="ghost" onClick={onHistory}>
-          History
-        </button>
-      </div>
     </div>
   );
 }

@@ -8,14 +8,14 @@ serving path reproduces the prototype's stored score for that image (§10.6).
 
 Checks:
   1. weights load with `strict=True`;
-  2. output shape is [1, 4];
+  2. output shape is [1, number of checkpoint labels];
   3. scores reproduce the expected vector within tolerance.
 
-The expected scores were produced by the prototype's own evaluation run
-(prototype-results/hybrid_v1/resnet50_hires/predictions/test_predictions.csv,
-image ECG000002) on GPU with AMP; CPU fp32 differs by ~1e-3 at most (§17.9),
-hence the default tolerance. This is what catches "someone upgraded timm and
-`resnet50.tv_in1k` now means something slightly different".
+Each descriptor names its own expected vector and provenance. Most legacy
+vectors came from the prototype's evaluation of ECG000002 on GPU with AMP;
+the V1 ConvNeXt fixture is explicitly a CPU-fp32 serving-path vector because
+that run did not evaluate the older corpus sheet. This is what catches a
+changed timm tag, architecture argument, preprocessing path, or weight file.
 
 Also importable: `verify_model(ld, fixture, expected, tolerance)` is called by
 backend.main at startup (warn-only) when the fixture is configured.
@@ -78,8 +78,10 @@ def verify_model(ld: LoadedDescriptor, fixture: Path, expected: dict | None,
                                              pre.normalize.mean, pre.normalize.std)
 
     logits = runner._forward_views(lm, views)
-    if list(logits.shape) != [1, 4]:
-        raise RuntimeError(f"expected output shape [1,4], got {list(logits.shape)}")
+    expected_shape = [1, len(desc.labels)]
+    if list(logits.shape) != expected_shape:
+        raise RuntimeError(
+            f"expected output shape {expected_shape}, got {list(logits.shape)}")
     scores = 1.0 / (1.0 + np.exp(-logits.float().numpy()))[0]
     report = {"model": desc.id,
               "scores": {l: float(scores[i]) for i, l in enumerate(desc.labels)},

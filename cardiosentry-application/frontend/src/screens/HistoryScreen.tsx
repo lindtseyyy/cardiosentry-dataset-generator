@@ -71,8 +71,7 @@ export default function HistoryScreen({
     <div>
       <h1 className="section-title">History</h1>
       <p className="section-sub">
-        {captures.length} capture{captures.length === 1 ? "" : "s"} — newest
-        first.
+        {captures.length} capture{captures.length === 1 ? "" : "s"}
       </p>
 
       {error ? <div className="msg error">{error}</div> : null}
@@ -99,21 +98,11 @@ export default function HistoryScreen({
               </div>
               <div className="history-body">
                 <div className="history-title">
-                  <span
-                    className={`quality-dot ${c.quality_level}`}
-                    title={`quality: ${c.quality_level}`}
-                  />
                   <span className="mono">{c.capture_id}</span>
                 </div>
                 <div className="history-meta">{fmtTime(c.created_utc)}</div>
                 {c.sheet_id ? (
                   <div className="history-meta">sheet {c.sheet_id}</div>
-                ) : null}
-                {c.latest_model_id ? (
-                  <div className="history-meta">
-                    model <span className="mono">{c.latest_model_id}</span>
-                    {c.has_correction ? " · corrected" : ""}
-                  </div>
                 ) : null}
                 {c.latest_positive.length ? (
                   <div className="hstack" style={{ marginTop: 6 }}>

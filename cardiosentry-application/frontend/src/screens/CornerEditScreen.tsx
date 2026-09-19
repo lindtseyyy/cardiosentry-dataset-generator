@@ -3,7 +3,6 @@ import { api, friendlyMessage, isApiError } from "../api/client";
 import type { CaptureUploadResponse, Point, RectifyResponse } from "../api/types";
 import { useApp } from "../AppContext";
 import QuadEditor from "../components/QuadEditor";
-import QualityBanner from "../components/QualityBanner";
 
 const FULL_FRAME: Point[] = [
   [0.05, 0.05],
@@ -76,8 +75,6 @@ export default function CornerEditScreen({
           Automatic detection was unsure — check the corners.
         </div>
       ) : null}
-
-      <QualityBanner quality={upload.quality} />
 
       <QuadEditor
         imageUrl={upload.files.preview}

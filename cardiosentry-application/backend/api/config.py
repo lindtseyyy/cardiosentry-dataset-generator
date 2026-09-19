@@ -31,12 +31,16 @@ def app_config(request: Request):
             "id": d.id,
             "display_name": d.display_name,
             "version": d.version,
-            "labels": d.labels,
-            "display_names": d.display_names,
+            "labels": d.served_labels,
+            "display_names": d.served_display_names,
+            "suppressed_labels": d.output.suppressed_labels,
             "input_size": list(d.preprocess.input_hw),      # [height, width]
             "views": [list(v) for v in st.active_model.views],
             "checkpoint_sha256_short": st.active_model.checkpoint_sha256[:8],
-            "thresholds": dict(zip(d.labels, st.active_model.thresholds)),
+            "thresholds": {
+                label: st.active_model.thresholds[d.labels.index(label)]
+                for label in d.served_labels
+            },
             "threshold_source": d.thresholds.source,
         },
         "quality": {
@@ -74,7 +78,7 @@ def app_config(request: Request):
             # BEFORE the user starts a minutes-long Integrated Gradients run
             # rather than after (§XAI cost).
             "cost": {
-                m: estimate_passes(m, len(d.labels), settings.explain_ig_steps)
+                m: estimate_passes(m, len(d.served_labels), settings.explain_ig_steps)
                 for m in EXPLAIN_METHODS
             },
         },

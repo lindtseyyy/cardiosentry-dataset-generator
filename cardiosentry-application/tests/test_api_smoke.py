@@ -36,7 +36,7 @@ def test_models_list(client):
     ids = {x["id"] for x in m["models"]}
     assert {"resnet50_cbam_nat768", "efficientnetv2_s_cbam_nat768",
             "efficientnetv2_s_nat768", "resnet50_hires", "resnet50_dual",
-            "resnet50_v1"} <= ids
+            "resnet50_v1", "convnextv2_tiny_v1img_v1"} <= ids
     active = [x for x in m["models"] if x["active"]][0]
     assert active["call_style"] == "tensor"
     assert active["input_size"] == [768, 1024]      # [height, width]

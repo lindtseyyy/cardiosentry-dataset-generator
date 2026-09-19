@@ -84,12 +84,6 @@ export default function ReferenceLabels({
   return (
     <div className="panel">
       <h2>Reference labels</h2>
-      <p className="sub">
-        Record what the ECG actually shows (ground truth).{" "}
-        {blindMode
-          ? "Blind mode is on — enter labels before revealing scores."
-          : "Entering labels after seeing the scores can bias the dataset."}
-      </p>
 
       <div className="checks-grid">
         {labels.map((label) => (
@@ -127,16 +121,13 @@ export default function ReferenceLabels({
             id="ref-notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Optional — device, paper size, scan quality…"
+            placeholder="Optional"
           />
         </div>
 
         <div className="toggle-row">
           <div className="labels">
             <span className="t">Labels entered before prediction</span>
-            <span className="d">
-              Set if you recorded these before seeing the model output.
-            </span>
           </div>
           <span className="switch">
             <input

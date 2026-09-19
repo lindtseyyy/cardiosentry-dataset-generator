@@ -266,13 +266,14 @@ def predict_capture(capture_id: str, body: PredictRequest, request: Request):
     thresholds_override = None
     if body.thresholds:
         lm_any = st.model(body.model_id)
-        missing = [l for l in lm_any.descriptor.labels if l not in body.thresholds]
+        served_labels = lm_any.descriptor.served_labels
+        missing = [l for l in served_labels if l not in body.thresholds]
         if missing:
             raise ApiError(422, "INCOMPLETE_THRESHOLDS",
                            "thresholds must cover every label of the model: "
                            + ", ".join(missing) + " missing")
         for label in body.thresholds:
-            if label not in lm_any.descriptor.labels:
+            if label not in served_labels:
                 raise ApiError(422, "UNKNOWN_LABEL",
                                f"unknown label {label!r}")
             if not 0.0 <= body.thresholds[label] <= 1.0:
@@ -309,7 +310,8 @@ def predict_capture(capture_id: str, body: PredictRequest, request: Request):
 
     return PredictionResponse(
         run_id=run_id, capture_id=capture_id, model=rec.model,
-        labels=lm.descriptor.labels, display_names=lm.descriptor.display_names,
+        labels=lm.descriptor.served_labels,
+        display_names=lm.descriptor.served_display_names,
         scores=pr.scores, logits=pr.logits, thresholds=pr.thresholds,
         threshold_source=pr.threshold_source, positive=pr.positive,
         timing_ms=pr.timing_ms, created_utc=created_utc,

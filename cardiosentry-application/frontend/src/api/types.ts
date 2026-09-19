@@ -40,6 +40,7 @@ export interface ActiveModelConfig {
   version: string;
   labels: string[];
   display_names: Record<string, string>;
+  suppressed_labels: string[];
   input_size: ModelInputSize;
   views: ModelInputSize[];
   checkpoint_sha256_short: string;
@@ -191,6 +192,8 @@ export interface ModelListItem {
   version: string;
   notes: string;
   labels: string[];
+  model_labels: string[];
+  suppressed_labels: string[];
   views: ModelInputSize[];
   call_style: string;
   input_size: ModelInputSize;
