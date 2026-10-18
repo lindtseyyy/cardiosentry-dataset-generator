@@ -63,27 +63,17 @@ Thumbs.db
 .vscode/
 
 # ---------------------------------------------------------------------------
-# CardioSentry web application (cardiosentry-application/)
-#
-# captures/ is the hard requirement: photographs of real ECG sheets may carry
-# printed patient identifiers. Verify this BEFORE the first run — a committed
-# patient photograph is not retractable from git history (plan §19.4).
+# CardioSentry web application — tracked by its OWN repository
+# (github.com/lindtseyyy/cardiosentry-application), not by this one:
+#   cardiosentry-application/        PostgreSQL build, branch main
+#   cardiosentry-application-local/  JSON-storage build, branch local-json
+#                                    (git worktree of the same repository)
+# Its own .gitignore keeps captures/ (photographs of real ECG sheets may carry
+# printed patient identifiers, plan §19.4), .env and models/weights/ out of git.
 # ---------------------------------------------------------------------------
-cardiosentry-application/captures/
+/cardiosentry-application/
+/cardiosentry-application-local/
 captures_export.csv
-cardiosentry-application/.env
-
-# Model weights are ~100-500 MB binaries, copied from prototype-results/
-# (see cardiosentry-application/models/README.md). The descriptors are code
-# and ARE committed.
-cardiosentry-application/models/weights/
-
-# Frontend build products
-cardiosentry-application/frontend/node_modules/
-cardiosentry-application/frontend/dist/
-
-# HTTPS certs (make_cert.sh)
-cardiosentry-application/certs/
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
