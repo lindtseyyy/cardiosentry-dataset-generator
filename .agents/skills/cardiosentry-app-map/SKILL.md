@@ -61,7 +61,7 @@ docs/              paper-ready system flowcharts and supporting design notes
 | `rectify.py` | homography warp -> `corrected.png` on a fixed canvas | `training_canvas` \| `native_aspect` |
 | `preprocess.py` | ★ **the canonical training-input chain** -> `model_input.png` + tensor | see tripwire 1 |
 | `quality.py` | brightness/contrast/clipping/glare/area/skew/px-per-mm at upload, blur + grid FFT at rectify; `poor_reasons` | "warn" flags never block; "poor" → `422 POOR_IMAGE_QUALITY` when `quality_block_on_poor` (default true): upload folder `rmtree`d, no record; rectify writes/records nothing. Geometry flags only when detection succeeded. UI: `components/QualityWarnings.tsx` on corner + preview screens |
-| `registry.py` | discover + validate `models/*.yaml`, resolve `arch.*`, hash weights | all at startup, fails loud |
+| `registry.py` | discover + validate `models/*.yaml`, resolve `arch.*`, hash weights | all at startup, fails loud; only exception: a non-active descriptor whose `.pt` is missing is skipped with a warning |
 | `runner.py` | build arch, `load_state_dict(strict=True)`, thresholds, views, predict | F2/F3 adapters live here |
 | `explain.py` | Grad-CAM (the only method; IG/Jacobian removed 2026-10-04), header metric, memory guard | ~550 lines |
 | `guidance.py` | four-tier urgency + next steps over a stored run and ephemeral patient answers; symptom/history escalation, conflict/caveat combinations and combination steps; Philippine hotline 911; under-18 Yellow floor + `cautions` | per-model `RULE_SETS`, locked to `SUPPORTED_MODEL_IDS`; import-time rule/combination coverage asserts; answers never stored; UI shows `cautions` prominently and `combination_notes` visibly |
