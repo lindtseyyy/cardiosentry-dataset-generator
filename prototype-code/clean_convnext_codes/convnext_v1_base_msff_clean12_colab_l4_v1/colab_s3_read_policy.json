@@ -1,0 +1,24 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadClean12ImageArchive",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::cardiosentry/dataset/clean_ecg_signal_images_clean12.tar*"
+    },
+    {
+      "Sid": "ReadFrozenSplits",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::cardiosentry/dataset/splits/*"
+    },
+    {
+      "Sid": "ListDataset",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::cardiosentry",
+      "Condition": {"StringLike": {"s3:prefix": ["dataset/*"]}}
+    }
+  ]
+}

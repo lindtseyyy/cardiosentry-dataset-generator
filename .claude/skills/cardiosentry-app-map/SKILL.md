@@ -7,7 +7,7 @@ whenToUse: Any task touching cardiosentry-application/ — swapping or adding a 
 # CardioSentry application — map
 
 **Root:** `cardiosentry-application/` (paths below are relative to it).
-Last verified against the tree: **2026-08-29**. Keep it that way — see
+Last verified against the tree: **2026-10-29**. Keep it that way — see
 [Maintaining this skill](#maintaining-this-skill), which is **mandatory** on
 every change to the app.
 
@@ -15,73 +15,141 @@ every change to the app.
 
 | Question | File | Don't |
 |---|---|---|
+| Condensed repo guidelines for any AI assistant | `AGENTS.md` | let it drift from this map — update both |
 | What is this app, what are the stages, why is the code like this | `README.md` (§Layout, §The non-negotiables, §Models shipped) | re-derive it from source |
 | What each model is, how to swap one, the header caveat | `models/README.md` | read every `models/*.yaml` |
 | Where a vendored architecture came from and what was changed | `backend/arch/README.md` | diff against `prototype-code/` |
-| The spec the `§n.n` comments cite | `../CARDIOSENTRY_WEB_APP_PLAN.md` (1105 lines) | grep it unless a `§` reference needs resolving |
+| The spec the `§n.n` comments cite | `../CARDIOSENTRY_WEB_APP_PLAN.md` (1105 lines; no-database requirement, Q9 and §14 "warn, never block" superseded) | grep it unless a `§` reference needs resolving |
+| Guidance tiers, rules, reviewed models | `docs/clinical-guidance.md` | change rules without it |
 
 ## Layout
 
 ```
 backend/
-  main.py          lifespan: registry -> load model -> warm-up -> self-check -> QR/URLs -> static mount
-  settings.py      ALL config; pydantic-settings, env prefix CARDIOSENTRY_, reads ./.env
+  main.py          lifespan: connect/migrate DB -> accounts -> registry -> load model -> warm-up -> load ECG gate -> self-check -> QR/URLs -> static mount
+  settings.py      ALL config; pydantic-settings, CARDIOSENTRY_ prefix + DATABASE_URL alias, reads ./.env
   errors.py        ApiError / NotFound (code + status, stable error codes)
   api/             routes only — thin; state.py owns the lifespan singletons
   services/        the actual work (see table below)
-  schemas/         pydantic: request/response AND the on-disk record shapes
+  schemas/         pydantic: request/response AND stored record shapes
   arch/            VENDORED training-time nn.Module code, one package per round
-models/            <id>.yaml descriptors + active.yaml symlink + weights/ (gitignored)
+models/            <id>.yaml descriptors + active.yaml symlink + gates/<id>.yaml (ECG gates: ocr_lead_labels_v1 default, learned alternative) + weights/ (gitignored)
 frontend/          Vite + React 18 + TS PWA; src/{screens,components,api}
-scripts/           verify_model.py · reprocess.py · export_dataset.py · make_cert.sh
+scripts/           verify_model.py · reprocess.py · export_dataset.py · import_filesystem.py · make_cert.sh
 tests/             conftest pins ONE model; fixtures/ checked in
-captures/          runtime data (gitignored) — filesystem + JSON IS the database
+captures/          runtime PHI images/binary arrays only (gitignored); live records are in PostgreSQL; legacy JSON archived outside the repo
 ```
+
+- **Frontend:** clicking the topbar username opens `#/account`
+  (`screens/AccountScreen.tsx`) to edit the username/password.
+  `components/PasswordInput.tsx` is shared with `screens/AuthScreen.tsx`.
+- **Frontend typeface/layout:** Roboto only, self-hosted via
+  `@fontsource/roboto` in `main.tsx` (no CDN: the app makes no outbound
+  calls). `.app` is a flex column; `.app-main` grows so `.app-footer` sits at
+  the bottom of the screen.
+- **Frontend logo:** the topbar wordmark (`App.tsx`) and the print report
+  header (`screens/ResultScreen.tsx`) use `public/logo.svg`, a transparent
+  ECG wave only (`#50E6A0`). `favicon.png` / `icon-*.png` /
+  `apple-touch-icon.png` keep the dark tile and are used for the browser tab,
+  home screen and PWA manifest only.
 
 ### services/ — who owns what
 
 | File | Owns | Note |
 |---|---|---|
+| `db.py` | local-only psycopg connection pool + versioned `MIGRATIONS` | startup fails before model load if DB is unreachable; advisory transaction lock; no secret URL in logs |
+| `records.py` | `RecordStore`: JSONB captures, prediction runs and explain records, owner/live queries, locked mutations and soft delete | run row + capture run-id list change in one transaction; NUL stripping; idempotent legacy import |
+| `accounts.py` | PostgreSQL `accounts` / `sessions`, salted PBKDF2-SHA256 (600k), persistent 30-day sessions, immutable `account_id` | creates `admin`/`admin` only if no account has `ADMIN_ACCOUNT_ID`, with a WARNING; `owner_of`: missing/null owner → admin account id. Rename keeps sessions; password change revokes other sessions transactionally, keeping the current one |
 | `ingest.py` | upload validation, EXIF orient, GPS strip, hash, store `original.jpg` | size/pixel bombs gated here |
+| `ecg_gate.py` | ECG / not-ECG gate on every upload, before detect: `load_gate` reads `models/gates/<id>.yaml` (`CARDIOSENTRY_ECG_GATE`, default `ocr_lead_labels_v1`, empty = off) and dispatches on `kind`; also the `learned` gate: frozen clean12 ConvNeXt-V1 Tiny + RFPN + `gate_head` (own `.pt`, not the diagnostic Tiny weights), threshold `gate_threshold` 0.5 | independent of the active model, not in `/api/models`; reject = `422 NOT_AN_ECG`, folder `rmtree`d, no record; accepted → `record.ecg_gate` (`kind`, `score`, `threshold`, `leads_found`); the learned gate lets EEG printouts through |
+| `ecg_gate_ocr.py` | `ocr_lead_labels` gate: resize to 2400 px, keep character-sized ink blobs per `cleanup` pass (max-channel; min-channel + grid-line removal), `tesseract` CLI `--psm 11` (subprocess, `OMP_THREAD_LIMIT=1`, passes in parallel), accept at ≥ `min_leads` (4) of `counted_leads` (aVR, aVL, aVF, V1–V6) | I/II/III reported, never counted (noise); needs the tesseract binary (startup fails without it); ~2–4 s accept, ≤ ~7 s reject; far-away photos are rejected (labels unreadable) |
 | `detect.py` | paper-quad detection | classical OpenCV + fallback ladder, no ML |
 | `rectify.py` | homography warp -> `corrected.png` on a fixed canvas | `training_canvas` \| `native_aspect` |
 | `preprocess.py` | ★ **the canonical training-input chain** -> `model_input.png` + tensor | see tripwire 1 |
-| `quality.py` | blur/brightness/contrast/glare/px-per-mm warnings | warn, **never** block |
+| `quality.py` | brightness/contrast/clipping/glare/area/skew/px-per-mm at upload, blur + grid FFT at rectify; `poor_reasons` | "warn" flags never block; "poor" → `422 POOR_IMAGE_QUALITY` when `quality_block_on_poor` (default true): upload folder `rmtree`d, no record; rectify writes/records nothing. Geometry flags only when detection succeeded. UI: `components/QualityWarnings.tsx` on corner + preview screens |
 | `registry.py` | discover + validate `models/*.yaml`, resolve `arch.*`, hash weights | all at startup, fails loud |
 | `runner.py` | build arch, `load_state_dict(strict=True)`, thresholds, views, predict | F2/F3 adapters live here |
-| `explain.py` | Grad-CAM / Integrated Gradients / Jacobian, header metric, memory plan | 937 lines, the biggest module |
-| `storage.py` | capture dirs, atomic JSON, id regexes, **file-serving whitelists** | path-traversal gate |
+| `explain.py` | Grad-CAM (the only method; IG/Jacobian removed 2026-10-04), header metric, memory guard | ~550 lines |
+| `storage.py` | image/binary dirs, id regexes, **file-serving whitelists**, trash moves | path-traversal gate; no JSON record readers/writers |
+| `guidance.py` | four-tier urgency + next steps over a stored run and ephemeral patient answers; symptom/history escalation, conflict/caveat combinations and combination steps; Philippine hotline 911; under-18 Yellow floor + `cautions` | per-model `RULE_SETS`, locked to `SUPPORTED_MODEL_IDS`; import-time rule/combination coverage asserts; answers never stored; UI shows `cautions` prominently and `combination_notes` visibly |
 
 ### API surface
 
 ```
 GET    /api/health                                  health.py
 GET    /api/config                                  config.py   (frontend holds NO model knowledge)
+POST   /api/auth/register                          auth.py      create account + sign in (201)
+POST   /api/auth/login                             auth.py      sign in (200)
+POST   /api/auth/logout                            auth.py      revoke session + clear cookie
+GET    /api/auth/me                                auth.py      current username; session required
+PATCH  /api/auth/account                           auth.py      change username/password; session + current password required
 GET    /api/models                 /api/models/active            models.py
 GET    /api/models/{id}/layers                      explain.py  (models_router — NOT models.py)
-POST   /api/captures                                captures.py  ingest + detect + quality
-POST   /api/captures/{id}/rectify                   captures.py  warp + preprocess
+POST   /api/captures                                captures.py  ingest + ECG gate (422 NOT_AN_ECG) + detect + quality gate (422 POOR_IMAGE_QUALITY)
+POST   /api/captures/{id}/rectify                   captures.py  warp + preprocess + sharpness gate (422 POOR_IMAGE_QUALITY, nothing written)
 POST   /api/captures/{id}/predict                   captures.py  forward
 GET    /api/captures  ·  /api/captures/{id}         captures.py
 GET    /api/captures/{id}/files/{name}              captures.py  FILE_WHITELIST only
 PATCH  /api/captures/{id}/annotation                captures.py  reference labels (§17.6)
 DELETE /api/captures/{id}                           captures.py  trash, never unlink
+POST   /api/captures/{id}/guidance                  guidance.py  urgency tier; GUIDANCE_UNSUPPORTED_MODEL otherwise
 POST   /api/captures/{id}/explain                   explain.py
 GET    /api/captures/{id}/explain[/{xid}[/files/{name}]]         explain.py
 DELETE /api/captures/{id}/explain/{xid}             explain.py
 ```
 
-### On-disk capture record
+`main.py`'s `auth_gate` returns `401 AUTH_REQUIRED` without a valid session on
+every `/api/*` path except health, config, login, register and logout. The
+optional `CARDIOSENTRY_APP_TOKEN` gate still applies in addition. All capture
+routes (including files, guidance and explain) are owner-scoped; another user's
+capture returns `404 CAPTURE_NOT_FOUND`. Listing filters by owner before paging;
+admin has no access to other users' captures.
+
+Explain metadata is served by `GET /api/captures/{id}/explain/{xid}`.
+`GET …/explain/{xid}/files/record.json` returns `404 UNKNOWN_FILE`; only PNGs
+and optional `raw.npz` pass the explain file gate.
+
+### Storage
+
+**PostgreSQL schema v1:** `accounts`, `sessions`, `captures`, `prediction_runs`,
+`explain_runs`, `schema_migrations`. Capture/prediction/explain records are JSONB;
+images and optional binary arrays stay on disk:
 
 ```
 captures/YYYY-MM-DD/YYYY-MM-DD_HHMMSS_xxxxxx/
-  capture.json  original.jpg  preview.jpg  overlay.jpg  corrected.png  model_input.png
-  predictions/run_<ts>_<model_id>.json
-  explain/xai_<ts>_<method>_<model_id>/{<method>_<LABEL>_{heatmap,overlay}.png, record.json}
+  original.jpg  preview.jpg  overlay.jpg  corrected.png  model_input.png
+  explain/xai_<ts>_<method>_<model_id>/
+    <method>_<LABEL>_{heatmap,overlay}.png  raw.npz (optional)
 ```
+New capture records store the creator's permanent account id in `record.owner`
+(username at registration, immutable on rename).
+`captures.owner_id = owner_of(record)` uses `admin` for missing/null owners,
+even after admin renames itself; imported JSON is not backfilled.
+DELETE sets `trashed_utc` and moves the folder to `captures/_trash/<date>/<id>/`;
+reads filter out trashed rows.
+
+Legacy `capture.json`, prediction JSON and explain `record.json` were imported
+and verified, then archived to
+`~/.local/share/cardiosentry/legacy-json/legacy-json.tar.gz`, with per-file
+`legacy-json.sha256`, tarball `legacy-json.tar.gz.sha256` and aggregate
+`VERIFY.txt`. The legacy archive is PHI: directories are 0700, files 0600,
+outside the repo and never served. Restore by extracting it and running
+`scripts/import_filesystem.py --data-dir <dir>`; the app never reads legacy
+JSON. Records go through `RecordStore`; `atomic_write_json` is removed.
+Use `api/auth.py`'s `owned_capture` for the owner-scoped record and folder.
+
 Ids and servable names are regex-gated in `storage.py`
 (`CAPTURE_ID_RE`, `FILE_WHITELIST`, `EXPLAIN_ID_RE`, `EXPLAIN_FILE_RE`). A new
 stage file must be added to the whitelist or it 404s.
+
+The DB lives in volume `postgres-db-cardiosentry-data`; losing it loses accounts
+and records, not images. The legacy archive can recover only pre-migration data.
+Back up with `docker exec postgres-db-cardiosentry pg_dump -U cardiosentry cardiosentry`
+and back up images separately; both contain sensitive data, and neither includes
+the archive. The legacy archive is PHI; erasure must also cover it. README
+§Security & privacy has the restore commands, permanent-erasure SQL and
+folder/archive/retained-copy procedure. The archive is not encrypted at rest;
+`age`/`gpg` encryption is a later option only.
 
 ## Task → files (change these together)
 
@@ -90,12 +158,18 @@ stage file must be added to the whitelist or it 404s.
 | **Swap the active model** | `models/active.yaml` symlink → done. Then the coupled docs/tests below. |
 | **Add a model** | see [Adding a model](#adding-a-model) — it is a 7-step checklist, follow it |
 | Change a threshold/label/geometry for one model | that `models/<id>.yaml` only — **never** `settings.py` |
+| Change the ECG gate | switch: `CARDIOSENTRY_ECG_GATE=<id>` only. Tune the OCR rule: `models/gates/ocr_lead_labels_v1.yaml` (`min_leads`, `counted_leads`, `cleanup`). Code: `services/{ecg_gate,ecg_gate_ocr}.py` + `schemas/ecg_gate.py` + `api/captures.py` `create_capture` + `models/README.md` §ECG gate (measurement table) + `tests/test_ecg_gate.py` + `tests/test_api_smoke.py` (`no_paper.jpg` must be rejected, `photo_clean.jpg` accepted); turning it off falsifies the privacy notice |
+| Change the quality gate | thresholds: `settings.py` `warn_*` + `.env.example` (warn) / `services/quality.py` `_POOR` (poor); on/off: `CARDIOSENTRY_QUALITY_BLOCK_ON_POOR`. Code: `services/quality.py` (`poor_reasons` text) + `api/captures.py` (`_blocks`, `_poor_quality_error`) + `frontend/src/components/QualityWarnings.tsx` (one line per warn flag) + `tests/test_api_smoke.py` (dark `photo_clean` rejected at upload, blurred one at rectify). Measured: clean fixtures carry warn-level `glare` (white paper ≥ 250) — never move glare into "poor" without real photos; turning blocking off falsifies the privacy notice |
 | Add a descriptor field | `schemas/model_descriptor.py` + every `models/*.yaml` that needs it + `models/README.md` "descriptor format" |
 | Change the input chain | `services/preprocess.py` **and** `tests/test_preprocess_parity.py` (it proves parity vs training code to 1e-6) |
 | Add/alter an API route | `api/<mod>.py` + `schemas/` + `frontend/src/api/{client,types}.ts` + `tests/test_api_smoke.py` |
+| Auth/ownership | `services/{accounts,records}.py` + `api/auth.py` + `main.py` `auth_gate` + `schemas/{auth,capture}.py` + `owned_capture` callers (`api/captures.py`, `api/explain.py`, `api/guidance.py`) + `frontend/src/{App.tsx,api/{client,types}.ts,screens/{AuthScreen,AccountScreen}.tsx,components/PasswordInput.tsx}` + `frontend/src/components/PrivacyNotice.tsx` / `api/config.py` notice version + `tests/{conftest,test_accounts,test_api_smoke}.py` |
+| DB schema | `services/db.py` `MIGRATIONS` (append a version, never edit v1) + `services/{records,accounts}.py` + `scripts/import_filesystem.py` + `tests/test_database.py` |
 | Add a stage output file | `services/storage.py` FILE_WHITELIST + `api/captures.py` + frontend |
 | Change explain behaviour | `services/explain.py` + `api/explain.py` + `schemas/explain.py` + `tests/test_explain.py` |
+| Change guidance rules / add a guided model | `services/guidance.py` (`RULE_SETS`, `FINDING_RULES`, `COMBINATIONS`; 911, pediatric floor) + `api/guidance.py` if route handling changes + `schemas/guidance.py` (`cautions`, `combination_notes`) + `frontend/src/api/types.ts` + `frontend/src/components/GuidancePanel.tsx` + `frontend/src/styles.css` (visible/printable cautions and clinician notes) + `docs/clinical-guidance.md` + `tests/test_guidance.py` |
 | Add a setting | `settings.py` + `.env.example` (keep them in sync — the example is the docs) |
+| Change the Data Privacy Notice | `frontend/src/components/PrivacyNotice.tsx` + bump `PRIVACY_NOTICE_VERSION` in `api/config.py` (re-prompts every browser) — and if the backend's data handling changes, the notice text must change with it |
 | Vendor a new arch package | `backend/arch/<pkg>/` + `backend/arch/README.md` provenance table + deviations list |
 | Frontend change | `frontend/src/`; rebuild `npm run build` — the backend serves `frontend/dist/` |
 
@@ -110,8 +184,11 @@ easy to get wrong:
    of `prototype-results/<run>/report.txt` names it (`CardioSentry baselines v2
    | <run>`), and `torch.load(best.pt)["model"]` settles it: bare timm keys
    (`conv_stem…classifier`) = `baselines_v2`, `backbone.*`/`attn.*` =
-   `hybrids_v2`. Wrong package = `strict=True` failure, not a subtle bug. Not
-   vendored yet? Vendor it first (`backend/arch/README.md`).
+   `hybrids_v2`, `backbone.*` + `neck.*`/`fuse_fc.*` = a clean12 fusion run
+   (`convnext_v1_rfpn_clean12` for `CS_FUSION=rfpn`). Wrong package =
+   `strict=True` failure, not a subtle bug. Not vendored yet? Vendor it first
+   (`backend/arch/README.md`). A clean12 `inference.pt` (no `optimizer`/
+   `model_ema`) already holds the selected weights under `model`.
 2. `expected_protocol_fingerprint` — round-1/round-3 blobs store only
    `fingerprint`; the runner falls back to it. Copy from `config_snapshot.json`.
 3. `explain.target_layer` — probe, don't guess: `GET /api/models/<id>/layers`,
@@ -153,14 +230,58 @@ easy to get wrong:
    which the descriptor's `verify` block overrides.
 7. **Do not upgrade timm.** The vendored packages depend on `create_model` tag
    semantics; the pin is `timm 1.0.28`.
+8. **The Data Privacy Notice (RA 10173, Philippines) states facts about the
+   backend.** `PrivacyNotice.tsx` promises server-side storage with no
+   third-party transfer, trash-not-unlink, guidance answers not saved, and the
+   stored fields. Change any of those and update the notice + bump
+   `PRIVACY_NOTICE_VERSION` (currently `2026-10-28.1`; it also promises that uploads the ECG gate
+   or the quality gate rejects are not stored, and that a photo rejected as blurry at rectify stays stored but is not analysed).
+   `CaptureScreen` hides the photo buttons until the current version is
+   accepted; each upload sends `privacy_notice` → `session.privacy_notice_ack`
+   (None = API/script caller). Controller/contact come from
+   `CARDIOSENTRY_PRIVACY_CONTROLLER` / `_CONTACT`; unset shows "Not yet configured".
+9. **`captures.owner_id = owner_of(record)` uses permanent account ids.**
+   Missing/null `record.owner` means admin. Imported JSON is never backfilled;
+   compare ownership with `current_account(request).account_id`, never
+   `.username`. Account ids stay reserved after a rename; admin is not a
+   superuser. `owned_capture` checks the live row and the image folder.
+10. **The session cookie is deliberately not Secure over plain HTTP.**
+    `cardiosentry_session` is HttpOnly, SameSite=Lax, lasts 30 days, and is Secure
+    only over HTTPS; setting Secure unconditionally breaks LAN/TestClient login.
+11. **The shared test `client` is logged in as admin — never log it out.**
+    Use function-scoped `anon_client` for auth/logout tests. It shares the
+    running app with no admin cookie and no second lifespan/model load.
+12. **JSONB rejects `\u0000`.** Phone EXIF NUL padding occurs in legacy and new
+    uploads; `RecordStore` strips NULs recursively from keys and string values
+    and dumps with `allow_nan=False`. Do not bypass that boundary.
+13. **Tests only use `<db>_test` / `<db>_test_unit` for app data.**
+    `conftest` rewrites the settings URL at import and guards database names;
+    session/per-test fixtures recreate them via the `postgres` maintenance DB.
+    Never bypass the guards or open the real application database in tests.
+14. **`auth_gate` is async; psycopg stores are synchronous.** Dispatch its
+    session lookup with `await run_in_threadpool(...)`, never directly on the
+    event loop.
+15. **Applied migrations are immutable.** Never edit migration v1 in
+    `db.MIGRATIONS`; append a new version. Existing databases skip old versions.
 
 ## Running things
 
 No virtualenv and **no `python` binary** — use system `python3` (torch, timm,
 fastapi, cv2 all present). Run from the app root.
 
+PostgreSQL 16 must be running in `postgres-db-cardiosentry`.
+`settings.database_url` is a `SecretStr`; configure `DATABASE_URL` or
+`CARDIOSENTRY_DATABASE_URL` in `.env` (prefixed alias wins). The target is
+`127.0.0.1:5432/cardiosentry (user cardiosentry)`, never a remote host; keep the
+URL secret. Runtime dependency: `psycopg[binary,pool]>=3.2` (installed psycopg
+3.3.6 / psycopg_pool 3.3.3). The default ECG gate shells out to the `tesseract`
+binary (5.3.4 here; `apt install tesseract-ocr`); startup fails without it.
+
 ```bash
-python3 -m pytest -q                     # 43 tests, real CPU model, minutes not seconds
+python3 -m pip install --user --break-system-packages 'psycopg[binary,pool]'
+docker start postgres-db-cardiosentry            # if stopped
+python3 scripts/import_filesystem.py --data-dir <dir>  # legacy import/restore into an empty DB
+python3 -m pytest -q                     # 251 cases (121 functions), real CPU model, minutes not seconds
 python3 -m pytest -q tests/test_api_smoke.py
 python3 scripts/verify_model.py                  # active model vs its own stored vector
 python3 scripts/verify_model.py --model <id>     # any descriptor; picks up its verify block
@@ -168,6 +289,28 @@ python3 scripts/reprocess.py --all --model <id>  # re-score stored captures, no 
 python3 -m backend.main                          # serve (prints LAN URL + QR)
 cd frontend && npm run build                     # backend serves frontend/dist/
 ```
+
+The verified legacy import completed on 2026-10-08; restore from the extracted
+archive using `--data-dir` before an empty database's first app boot (README
+§Security & privacy, **Legacy JSON archive**). The importer is idempotent,
+leaves extracted files untouched, and existing database rows win. If an
+extracted legacy tree contains `accounts.json`, importing before startup seeds
+admin preserves its credentials; this archive contains no account file. No
+legacy data means no import is needed.
+
+Collected cases from `python3 -m pytest -q --collect-only`: accounts 2,
+api_smoke 16, database 2, detect 9, ecg_gate 8, explain 19, guidance 183,
+model_descriptor 4, preprocess_parity 8 (**251 total**). Unique top-level
+`def test_` functions in the same files: 2, 16, 2, 9, 5, 19, 57, 4, 7 respectively (**121 total**);
+parameterized cases are not separate functions.
+
+`database_url` recreates `<db>_test` (`cardiosentry_test`) once per session.
+`isolated_db` creates a migrated `<db>_test_unit` (`cardiosentry_test_unit`) per
+test that uses it and drops it afterwards. The role needs permission to create/
+drop these databases through `postgres`; the real app database is never opened.
+`client` depends on `database_url`; access stores at
+`client.app.state.csd.{db,records,accounts}`. Test images use
+`$TMPDIR/cardiosentry_test_captures`, not the real `captures/`.
 
 Boot health, without curl or a server:
 
@@ -203,5 +346,5 @@ Update when you:
   must not go stale on a swap) — confirm that stays true
 
 Then bump `Last verified` at the top to the date you checked the tree, and keep
-counts (43 tests, LOC, route list) honest — correct them rather than leaving a
+counts (251 cases, 121 functions, LOC, route list) honest — correct them rather than leaving a
 number that is now wrong.

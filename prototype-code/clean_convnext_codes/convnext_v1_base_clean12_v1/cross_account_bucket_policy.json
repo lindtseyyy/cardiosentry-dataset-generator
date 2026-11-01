@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PartnerListDatasetAndRuns",
+      "Effect": "Allow",
+      "Principal": {"AWS": "arn:aws:iam::PARTNER_ACCOUNT_ID:role/PARTNER_ROLE_NAME"},
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::cardiosentry",
+      "Condition": {"StringLike": {"s3:prefix": ["dataset/*", "runs/*"]}}
+    },
+    {
+      "Sid": "PartnerReadDataset",
+      "Effect": "Allow",
+      "Principal": {"AWS": "arn:aws:iam::PARTNER_ACCOUNT_ID:role/PARTNER_ROLE_NAME"},
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::cardiosentry/dataset/*"
+    },
+    {
+      "Sid": "PartnerReadWriteRuns",
+      "Effect": "Allow",
+      "Principal": {"AWS": "arn:aws:iam::PARTNER_ACCOUNT_ID:role/PARTNER_ROLE_NAME"},
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"],
+      "Resource": "arn:aws:s3:::cardiosentry/runs/*"
+    }
+  ]
+}

@@ -129,3 +129,35 @@ dataset-combination-code/ecg-dataset-pipeline/reports/v3_precheck.csv
 # --- Python packaging / test caches ---
 *.egg-info/
 .pytest_cache/
+
+# ---------------------------------------------------------------------------
+# Code only: no results, predictions, synthetic images or dataset-derived files
+# ---------------------------------------------------------------------------
+
+# --- Local scratch, tool state and prompt images ---
+.commandcode/
+tmp/
+images-for-prompt/
+
+# --- Results and predictions (any outputs/ or output/ folder, at any depth) ---
+outputs/
+output/
+
+# --- Dataset-derived files: splits, record lists, sample renders, waveforms ---
+dataset-combination-code/ecg-dataset-pipeline/reports/
+prototype-code/**/splits/
+prototype-code/**/samples/
+prototype-code/**/*.csv
+prototype-code/**/*.png
+prototype-code/**/*.dat
+prototype-code/**/*.hea
+prototype-code/**/*.docx
+prototype-code/clean_ecg_signal_images_ec2/comparison_kit_250_vs_500.json
+prototype-code/dataset_generation_code/v1_support/data/*
+!prototype-code/dataset_generation_code/v1_support/data/PROVENANCE.txt
+
+# --- ecg_image_v1_code bundle: ONE copy, next to its builder ---
+# prototype-code/dataset_generation_code/build_code_bundle.py writes it there,
+# and every render notebook already searches <ancestor>/dataset_generation_code/.
+prototype-code/**/ecg_image_v1_code.tar.gz*
+!prototype-code/dataset_generation_code/ecg_image_v1_code.tar.gz*

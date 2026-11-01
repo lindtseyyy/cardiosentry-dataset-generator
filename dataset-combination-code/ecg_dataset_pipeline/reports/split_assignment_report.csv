@@ -1,4 +1,0 @@
-cohort,split,records,pct,patient_groups,STEMI,AF,LVH,NORMAL
-harmonized,train,30555,81.85,16980,3299,9015,10518,10282
-harmonized,val,3439,9.21,2121,391,968,1043,1282
-harmonized,test,3335,8.93,2121,364,908,972,1328

@@ -1,0 +1,9 @@
+ptbxl patient map provenance
+built_utc: 2026-09-17T17:37:22Z
+subset: /home/lindtseyxvii/Codes/cardiosentry/dataset-files/MAIN_DATASET/V1_10S_STANDARDIZED_SUBSET
+database: /home/lindtseyxvii/Codes/cardiosentry/dataset-files/MAIN_DATASET/V1/metadata/ptbxl_reference/ptbxl_database.csv (21799 rows)
+upstream_signals: /home/lindtseyxvii/Codes/cardiosentry/dataset-files/ptb-xl-dataset (19398 records500 hashed)
+methods: {'no_upstream_identity': 19410, 'filename': 6456, 'content': 4676, 'unrecoverable_incomplete_upstream': 567}
+distinct_patients: 10060
+note: 567 HR misses have no counterpart even at 8uV coarse match;
+  local upstream copy holds 19526/21799 records500 files.
